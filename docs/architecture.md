@@ -60,6 +60,7 @@ create table rounds (
   question_text text not null,
   options jsonb not null,             -- ["옵션1","옵션2","옵션3","옵션4"]
   resolution_criteria text,
+  expected_winner_count int not null, -- 예산 게이트 계산용, 스폰서가 라운드 설계 단계에서 직접 입력 (자동 계산 아님)
   correct_option_index int,           -- null until resolved
   opens_at timestamptz not null,
   closes_at timestamptz not null,
