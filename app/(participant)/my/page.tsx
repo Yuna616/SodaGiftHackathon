@@ -25,10 +25,16 @@ const CLAIM_STATUS_LABEL: Record<ClaimOrder['status'], { text: string; className
   FAILED: { text: '지급 실패', className: 'bg-rose-50 text-rose-500' },
 };
 
-// 리워드 통화가 캠페인마다 다를 수 있는데(현재 데모 데이터는 GBP), 마이페이지 요약은
-// 통화 변환 없이 숫자 그대로 $ 표기로 통일한다 — 실제 환전은 하지 않는 단순화.
 function formatUsd(amount: number): string {
   return `$${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
+
+// 캠페인마다 리워드 통화가 다를 수 있어서(GBP/JPY/USD...) 개별 내역은 실제
+// 통화 그대로 표기한다. 상단 "누적 획득 리워드" 총액만 lib/exchangeRates
+// 기본 환율로 USD 환산해서 하나로 합친다(/api/participants/:id/wallet).
+function formatAmount(amount: number, currency: string | null): string {
+  const label = currency === 'KRW' ? '원' : (currency ?? '');
+  return `${amount.toLocaleString()} ${label}`.trim();
 }
 
 function formatDate(iso: string): string {
@@ -39,6 +45,7 @@ export default function MyPage() {
   const [participant, setParticipant] = useState<{ id: string; email: string } | null>(null);
   const [predictions, setPredictions] = useState<PredictionRow[] | null>(null);
   const [productMap, setProductMap] = useState<Record<string, ProductInfo>>({});
+  const [walletBalanceUSD, setWalletBalanceUSD] = useState(0);
   const [loading, setLoading] = useState(true);
 
   function loadParticipant(email: string) {
@@ -53,6 +60,9 @@ export default function MyPage() {
         if (data.participant) {
           setParticipant(data.participant);
           setPredictions(data.predictions ?? []);
+          fetch(`/api/participants/${data.participant.id}/wallet`)
+            .then((r) => r.json())
+            .then((wallet) => setWalletBalanceUSD(wallet.balanceUSD ?? 0));
         }
       })
       .finally(() => setLoading(false));
@@ -111,10 +121,6 @@ export default function MyPage() {
   );
   const amountClaims = useMemo(() => claims.filter((p) => p.claimOrder.payout_amount != null), [claims]);
   const productClaims = useMemo(() => claims.filter((p) => p.claimOrder.selected_product_id), [claims]);
-  const totalAmount = useMemo(
-    () => amountClaims.reduce((sum, p) => sum + (p.claimOrder.payout_amount ?? 0), 0),
-    [amountClaims]
-  );
 
   if (loading) {
     return (
@@ -151,7 +157,8 @@ export default function MyPage() {
 
         <div className="rounded-2xl bg-black p-5 mb-3">
           <p className="text-xs text-gray-400 mb-1">누적 획득 리워드</p>
-          <p className="text-3xl font-extrabold text-white">{formatUsd(totalAmount)}</p>
+          <p className="text-3xl font-extrabold text-white">{formatUsd(walletBalanceUSD)}</p>
+          <p className="mt-1 text-[11px] text-gray-500">스토어에서 쓸 수 있는 잔액(기본 환율로 USD 환산)</p>
         </div>
 
         {amountClaims.length > 0 && (
@@ -163,7 +170,7 @@ export default function MyPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{formatDate(p.claimOrder.created_at)}</p>
                 </div>
                 <span className="text-sm font-semibold text-gray-900 tabular-nums">
-                  {formatUsd(p.claimOrder.payout_amount ?? 0)}
+                  {formatAmount(p.claimOrder.payout_amount ?? 0, p.claimOrder.payout_currency)}
                 </span>
               </div>
             ))}

@@ -254,9 +254,11 @@ export interface Product {
   name: string;
   brand: string;
   price: number;
+  currency: string;
   country_code: string;
   stock_status: StockStatus;
   image_url: string | null;
+  type: string; // 'GIFT_CARD' | 'DIGITAL_VOUCHER' | 'MERCHANDISE' 등 — 소다기프트 원본 값 그대로
 }
 
 export type GiftOrderStatus = "order_placed" | "fulfilled" | "failed";
@@ -284,6 +286,7 @@ export const ANALYTICS_EVENTS = [
   "claim_completed",
   "sender_cta_clicked",
   "mission_completed",
+  "store_purchase_completed",
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];
