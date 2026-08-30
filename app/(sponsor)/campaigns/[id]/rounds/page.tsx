@@ -6,8 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Callout, Card } from "../../../_components/ui";
-
-const DEMO_SPONSOR_ID = "72495905-2368-41a3-8eba-fef7a07fcc21";
+import { DEMO_SPONSOR_ID } from "@/lib/constants";
 
 type Round = {
   id: string;

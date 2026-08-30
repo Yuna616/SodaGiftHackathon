@@ -16,9 +16,7 @@ import { Badge, Button, Callout, Card, Field, Input, Select } from "../../_compo
 import CampaignCard from "@/components/CampaignCard";
 import { CampaignDetailPreview } from "../../_components/CampaignDetailPreview";
 import type { CampaignOption, PublicCampaignWithConsensus } from "@/lib/types";
-
-// TODO: 인증 붙기 전까지 seed된 데모 스폰서 id 하드코딩 (supabase에 직접 심어둔 값)
-const DEMO_SPONSOR_ID = "72495905-2368-41a3-8eba-fef7a07fcc21";
+import { DEMO_SPONSOR_ID } from "@/lib/constants";
 
 type RewardMode = "PRODUCT" | "CREDIT";
 

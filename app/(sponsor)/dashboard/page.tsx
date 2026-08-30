@@ -12,9 +12,7 @@ import {
   type ProfileStats,
   type SponsorProfile,
 } from "../_components/SponsorProfileView";
-
-// TODO: 인증 붙기 전까지 seed된 데모 스폰서 id 하드코딩 (마법사와 동일한 값)
-const DEMO_SPONSOR_ID = "72495905-2368-41a3-8eba-fef7a07fcc21";
+import { DEMO_SPONSOR_ID } from "@/lib/constants";
 
 export default function SponsorDashboard() {
   const [sponsor, setSponsor] = useState<SponsorProfile | null>(null);

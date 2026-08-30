@@ -28,6 +28,9 @@ export type CampaignSummary = {
   ends_at: string | null;
   // 콘솔(owner)에서만 내려온다 — public 응답엔 필드 자체가 없음
   failed_claims_count?: number;
+  // 데모 계정(관리자 뷰)으로 조회했을 때만 내려온다 — 캠페인의 실제 소유
+  // 고객사명. 단일 스폰서 뷰에선 어차피 전부 같은 스폰서라 필드 자체가 없음.
+  sponsor_name?: string;
 };
 
 export type SponsorProfile = {
@@ -531,6 +534,7 @@ function CampaignRow({
           )}
           <Badge tone={CAMPAIGN_STATUS_TONE[campaign.status]}>{CAMPAIGN_STATUS_LABEL[campaign.status]}</Badge>
           {campaign.category && <Badge tone="purple">{CATEGORY_LABEL[campaign.category] ?? campaign.category}</Badge>}
+          {campaign.sponsor_name && <Badge tone="slate">{campaign.sponsor_name}</Badge>}
           {isOwner && (campaign.failed_claims_count ?? 0) > 0 && (
             <Badge tone="red">지급 실패 {campaign.failed_claims_count}건</Badge>
           )}
