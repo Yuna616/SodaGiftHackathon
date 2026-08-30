@@ -145,12 +145,13 @@ GET /v1/orders/{id}
 POST /v1/orders
 Header: SODA-API-KEY
 {
-  "item": { "id": <선택된 product id> },
+  "item": { "id": <선택된 product id>, "custom_amount": <CREDIT 모드만, payout_amount> },
   "delivery": { "method": "EMAIL", "recipient": {...}, "sender": { "name": "SodaPick" } },
   "message": "...",
-  "external_reference_id": "sodapick_{campaign_id}_{participant_id}"  // 유저앱과 동일 규칙 유지
+  "external_reference_id": "sodapick{campaign_id}{round_id}{participant_id}"  // 하이픈 제거, 유저앱과 동일 규칙 유지
 }
 ```
+> `external_reference_id`는 실호출로 확인함(2026-08-29): **영숫자만 허용**(하이픈·언더스코어 불가), `round_id`까지 넣어야 함(같은 참가자가 같은 캠페인의 다른 라운드에서 또 당첨될 때 값이 안 겹치게). `lib/soda/client.ts`의 `buildExternalReferenceId()` 참고.
 
 > 참고: 스폰서 앱은 직접 `POST /v1/orders`를 호출하지 않고(그건 유저앱의 클레임 완료 시점에 실행됨), 실패 건에 한해 "재시도" 액션을 통해 동일 호출을 트리거하는 역할만 한다 — 지급 실행 주체는 항상 참가자의 클레임 확정 시점으로 통일해 판정 로직의 단일 진실 공급원을 유지한다.
 
@@ -191,3 +192,24 @@ Header: SODA-API-KEY
 - [x] 예상 당첨자 수 계산 로직 확정 → **자동 계산하지 않고 스폰서가 라운드 설계 단계에서 직접 입력**. 콜드스타트 문제 자체가 사라짐(과거 데이터 불필요)
 - [ ] 이의제기(DisputeTicket) 처리 SLA와 담당 주체 (SodaPick 운영팀 vs 스폰서 자체 처리)
 - [ ] 스폰서 앱과 유저앱 사이의 판정 이벤트 전파 방식 (해커톤 스코프에선 같은 DB를 직접 조회하는 것으로 충분, 실서비스에선 이벤트 발행 방식 재검토 필요)
+- [ ] 크레딧 배당 풀의 통화 문제 — 소다기프트 샌드박스에 USD 가변금액 상품권이 없어(GBP/JPY/SGD만 존재) 예산 게이트의 크레딧 합계가 액면가 기준 추정치임. 실서비스에서는 환율 조회 API 연동 필요
+
+---
+
+## 13. 보상 방식 확장: 크레딧 배당 + 참여 미션
+
+기존엔 라운드 보상이 카탈로그 상품 지급(PRODUCT) 하나뿐이었는데, 스폰서가 라운드마다 아래 중 하나를 고를 수 있도록 확장했다.
+
+**PRODUCT (기존)**: 정답자가 리워드 카탈로그에서 원하는 상품을 직접 고름. 예산은 예상 당첨자 수 × 평균 단가로 추정.
+
+**CREDIT (신규)**: 라운드에 고정 풀 금액을 걸어두고(예: "100 SGD"), 판정 확정 시점에 정답자 수로 나눔. 예산은 추정이 아니라 풀 금액 그대로 확정 지출액이라, 당첨자가 몇 명이든 스폰서 지출이 바뀌지 않는다는 게 PRODUCT 모드 대비 장점.
+
+- **"그냥 돈"이 아니다**: 소다기프트 API엔 범용 현금 송금이 없다. 가변 금액 상품권도 전부 특정 브랜드(Amazon, adidas, Starbucks 등)에 락인돼 있어서, 스폰서가 브랜드를 미리 하나 정해 당첨자 전원에게 강제하면 참가자가 원하는 걸 살 수 없다. 그래서 스폰서는 **통화만** 정하고(예: SGD), 정답자 본인이 그 통화 안에서 원하는 브랜드 상품권을 판정 후 직접 고른다 — 그 카드에 자기 몫(풀 금액 ÷ 정답자 수)이 실려서 지급됨.
+- 지급 수단: 참가자가 고른 가변 금액 상품권에 `custom_amount`(= 자기 몫)를 넣어 `POST /v1/orders` 호출. 확정 시점(`/api/rounds/[id]/resolve`)엔 아직 주문하지 않고 `eligible` 상태로 몫만 계산해두며, 실제 주문은 참가자가 상품을 고르는 `/api/claims/[id]/confirm`에서 실행됨(PRODUCT 모드와 동일한 확정 지점).
+- FR 추가: **FR-8** 판정 확정 시 CREDIT 라운드의 정답자에게는 풀 금액 ÷ 정답자 수가 몫으로 배정되어야 한다 — 완료 기준: `POST /api/rounds/[id]/resolve` 성공 후 해당 라운드 정답자 전원의 `reward_claims.payout_amount`/`payout_currency`가 채워짐. **FR-9** 참가자가 고른 상품권 통화가 `payout_currency`와 다르면 확정 자체를 거부해야 한다 — 완료 기준: `/api/claims/[id]/confirm`이 통화 불일치 시 400
+
+**참여 미션 (신규)**: 캠페인 단위로 스폰서가 URL 하나를 지정하면, 참가자는 이 사이트를 방문해야 예측을 제출할 수 있다. 1차 스코프는 "사이트 방문"만 지원(구독·시청 등은 검증 수단이 없어 이후 과제). 방문 여부는 우리 서버를 거치는 리다이렉트 링크(`/api/campaigns/[id]/missions/visit`)로 추적한다.
+
+- FR 추가: **FR-10** `mission_url`이 설정된 캠페인은 미션 완료 기록이 없는 참가자의 예측 제출을 막아야 한다 — 완료 기준: `/api/predictions`(유저앱 담당, 미구현)가 `/api/campaigns/[id]/missions/status`로 확인 후 미완료면 403
+
+데이터 모델·라우트 세부사항은 `architecture.md` 2절(`rounds.reward_mode` 등), 4절(신규 라우트 표) 참고.

@@ -130,16 +130,17 @@ GET /v1/products?country_code={참가자국가}&page=0&size=10
 POST https://biz-sandbox-api.sodagift.com/v1/orders
 Header: SODA-API-KEY
 {
-  "item": { "id": <선택한 product id> },
+  "item": { "id": <선택한 product id>, "custom_amount": <가변금액 상품권일 때만> },
   "delivery": {
     "method": "EMAIL",
     "recipient": { "name": "<참가자 이름>", "email": "<참가자 이메일>" },
     "sender": { "name": "SodaPick" }
   },
   "message": "축하합니다! 예측에 성공하셨어요 🎉",
-  "external_reference_id": "sodapick_{campaign_id}_{participant_id}"
+  "external_reference_id": "sodapick{campaign_id}{round_id}{participant_id}"
 }
 ```
+> 실호출로 확인함(2026-08-29, 고객사앱 쪽에서 검증): `external_reference_id`는 영숫자만 허용(하이픈·언더스코어 들어가면 400), `round_id`까지 넣어야 같은 캠페인 다른 라운드 당첨 시 값이 안 겹침. 가변금액 상품권(고정 `amount`가 없고 `min_amount`~`max_amount` 범위인 상품)은 `item.custom_amount`(스네이크케이스)를 꼭 같이 보내야 함 — camelCase나 top-level 필드로는 인식 안 됨. `lib/soda/client.ts`의 `createOrder`/`buildExternalReferenceId` 그대로 재사용 가능.
 
 **클레임 페이지 상태 확인**
 ```

@@ -82,15 +82,15 @@ npm run dev
 curl https://biz-sandbox-api.sodagift.com/v1/products \
   -H "SODA-API-KEY: $SODA_API_KEY"
 
-# 주문 생성
+# 주문 생성 (가변금액 상품권은 item.custom_amount 필수, external_reference_id는 영숫자만)
 curl -X POST https://biz-sandbox-api.sodagift.com/v1/orders \
   -H "SODA-API-KEY: $SODA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "item": { "id": "<product_id>" },
+    "item": { "id": "<product_id>", "custom_amount": <가변금액 상품권일 때만> },
     "delivery": { "method": "EMAIL", "recipient": { "name": "...", "email": "..." } },
     "message": "...",
-    "external_reference_id": "sodapick_<campaign_id>_<participant_id>"
+    "external_reference_id": "sodapick<campaign_id><round_id><participant_id>"
   }'
 
 # 잔액 확인
