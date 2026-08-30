@@ -150,6 +150,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (claimsError) {
       return NextResponse.json({ error: claimsError.message }, { status: 500 });
     }
+
+    // CREDIT 모드는 지갑 원장에도 적립 기록을 남긴다 — 인앱 스토어에서 실제로
+    // 쓸 수 있는 잔액(참가자별·통화별 wallet_transactions 합계)이 이걸로 정해진다.
+    // 라운드 재판정 자체가 DB 트리거로 막혀있어(check_round_resolvable) 여기가
+    // 두 번 실행될 일이 없으니 중복 적립 걱정 없이 바로 넣는다.
+    if (round.reward_mode === "CREDIT" && payoutAmount !== null) {
+      const walletRows = correctPredictions.map((p) => ({
+        participant_id: p.participant_id,
+        amount: payoutAmount,
+        currency: round.credit_currency,
+        reason: "credit_reward" as const,
+      }));
+      const { error: walletError } = await supabase.from("wallet_transactions").insert(walletRows);
+      if (walletError) {
+        return NextResponse.json({ error: walletError.message }, { status: 500 });
+      }
+    }
   }
 
   return NextResponse.json({
