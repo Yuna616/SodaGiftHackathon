@@ -51,7 +51,7 @@ function ClaimDeliveryContent() {
     const data = await res.json();
     setSubmitting(false);
     if (!res.ok) {
-      setError('수령 처리에 실패했어요. 다시 시도해주세요');
+      setError('Failed to process delivery. Please try again');
       return;
     }
     router.push(`/claim/${predictionId}/complete?orderId=${data.order.id}`);
@@ -67,15 +67,15 @@ function ClaimDeliveryContent() {
 
   return (
     <div className="p-4">
-      <p className="text-xs text-gray-400 mb-1">2/3 · 배송 정보</p>
-      <h1 className="text-lg font-bold text-gray-900 mb-5">받으실 정보를 확인해주세요</h1>
+      <p className="text-xs text-gray-400 mb-1">2/3 · Delivery info</p>
+      <h1 className="text-lg font-bold text-gray-900 mb-5">Please confirm your delivery details</h1>
 
       <div className="rounded-xl bg-gray-50 p-3 mb-5">
         <p className="text-sm font-medium text-gray-800">{productName}</p>
         <p className="text-xs text-gray-400 mt-0.5">{productBrand}</p>
       </div>
 
-      <label className="block text-xs font-medium text-gray-500 mb-1">수령 이메일</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Recipient email</label>
       <input
         type="email"
         value={recipientEmail}
@@ -83,7 +83,7 @@ function ClaimDeliveryContent() {
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:border-soda-400"
       />
 
-      <label className="block text-xs font-medium text-gray-500 mb-1">받는 분 이름</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Recipient name</label>
       <input
         type="text"
         value={recipientName}
@@ -91,11 +91,11 @@ function ClaimDeliveryContent() {
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:border-soda-400"
       />
 
-      <label className="block text-xs font-medium text-gray-500 mb-1">메시지 카드 (선택)</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Message card (optional)</label>
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="축하합니다! 예측에 성공하셨어요"
+        placeholder="Congratulations! Your prediction was correct"
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-4 outline-none focus:border-soda-400 resize-none"
         rows={3}
       />
@@ -107,9 +107,9 @@ function ClaimDeliveryContent() {
         disabled={!recipientEmail || submitting}
         className="w-full rounded-xl bg-black text-white font-semibold py-3 text-sm disabled:opacity-40"
       >
-        {submitting ? '처리 중...' : '최종 확인'}
+        {submitting ? 'Processing...' : 'Confirm'}
       </button>
-      {participant && <p className="text-[11px] text-gray-400 mt-2 text-center">{participant.email} 계정으로 처리돼요</p>}
+      {participant && <p className="text-[11px] text-gray-400 mt-2 text-center">Processed under account {participant.email}</p>}
     </div>
   );
 }

@@ -3,8 +3,8 @@
 import { useState } from 'react';
 
 const MOCK_ACCOUNTS = [
-  { name: '김소다', email: 'soda.demo1@gmail.com', color: 'bg-soda-500' },
-  { name: '박픽', email: 'pick.demo2@gmail.com', color: 'bg-amber-400' },
+  { name: 'Soda Kim', email: 'soda.demo1@gmail.com', color: 'bg-soda-500' },
+  { name: 'Pick Park', email: 'pick.demo2@gmail.com', color: 'bg-amber-400' },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,9 +38,9 @@ export default function GoogleAccountPicker({
       >
         <div className="flex items-center gap-2 mb-4">
           <GoogleMark />
-          <p className="text-sm font-semibold text-gray-900">계정 선택</p>
+          <p className="text-sm font-semibold text-gray-900">Choose an account</p>
         </div>
-        <p className="text-xs text-gray-400 mb-4">SodaPick(으)로 이동할 계정을 선택하세요 (데모용 mock 로그인)</p>
+        <p className="text-xs text-gray-400 mb-4">Choose an account to continue to SodaPick (demo mock login)</p>
 
         <div className="flex flex-col gap-1 mb-3">
           {MOCK_ACCOUNTS.map((acc) => (
@@ -67,7 +67,7 @@ export default function GoogleAccountPicker({
             onClick={() => setCustomMode(true)}
             className="w-full rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600"
           >
-            다른 이메일 사용
+            Use another email
           </button>
         ) : (
           <div className="flex gap-2">
@@ -84,7 +84,7 @@ export default function GoogleAccountPicker({
               disabled={!EMAIL_RE.test(customEmail)}
               className="rounded-xl bg-black px-4 text-sm font-semibold text-white disabled:opacity-40"
             >
-              확인
+              Confirm
             </button>
           </div>
         )}

@@ -11,25 +11,25 @@ import type { PublicCampaignWithConsensus } from '@/lib/types';
 const SELECT_TRANSITION_MS = 180;
 
 const CATEGORY_LABEL: Record<string, string> = {
-  kpop: 'K팝',
-  esports: 'e스포츠',
-  variety: '예능',
-  drama: '드라마',
-  beauty: '뷰티',
+  kpop: 'K-Pop',
+  esports: 'Esports',
+  variety: 'Variety',
+  drama: 'Drama',
+  beauty: 'Beauty',
 };
 
 const STATUS_LABEL: Record<PublicCampaignWithConsensus['status'], { text: string; className: string }> = {
-  active: { text: '진행중', className: 'bg-soda-500 text-white' },
-  ended: { text: '집계중', className: 'bg-amber-400 text-white' },
-  resolved: { text: '발표완료', className: 'bg-black/60 text-white' },
+  active: { text: 'Live', className: 'bg-accent text-white' },
+  ended: { text: 'Tallying', className: 'bg-amber-400 text-white' },
+  resolved: { text: 'Announced', className: 'bg-black/60 text-white' },
 };
 
 function formatPrizeLine(campaign: PublicCampaignWithConsensus): string {
   const reward =
     campaign.prize_type === 'amount' && campaign.prize_amount
-      ? `${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? '원'}`
+      ? `${campaign.prize_currency ?? 'KRW'} ${campaign.prize_amount.toLocaleString()}`
       : `🎁 ${campaign.prize_label}`;
-  return campaign.winner_count !== null ? `${reward} · 최대 ${campaign.winner_count}명` : reward;
+  return campaign.winner_count !== null ? `${reward} · up to ${campaign.winner_count} winners` : reward;
 }
 
 export default function CampaignCard({ campaign }: { campaign: PublicCampaignWithConsensus }) {
@@ -49,7 +49,7 @@ export default function CampaignCard({ campaign }: { campaign: PublicCampaignWit
   }
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+    <div className="overflow-hidden rounded-3xl bg-white shadow-[0_2px_10px_rgba(20,22,26,.05)]">
       <Link href={detailHref} className="block active:scale-[0.99] transition">
         <div className="relative aspect-[16/9] w-full bg-gray-100">
           {campaign.thumbnail_url && (
@@ -61,24 +61,35 @@ export default function CampaignCard({ campaign }: { campaign: PublicCampaignWit
               loading="lazy"
             />
           )}
-          <div className="absolute top-2 left-2 flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold text-white bg-black/55 backdrop-blur rounded-full px-2 py-0.5">
-              {CATEGORY_LABEL[campaign.category] ?? (campaign.category || '캠페인')}
+          <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5">
+            <span className="rounded-full bg-black/70 px-2.5 py-1 text-[11px] font-bold text-white">
+              {CATEGORY_LABEL[campaign.category] ?? (campaign.category || 'Campaign')}
             </span>
-            <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${status.className}`}>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${status.className}`}>
               {status.text}
             </span>
           </div>
         </div>
 
-        <div className="px-4 pt-4">
-          <span className="text-xs font-semibold text-soda-600">{campaign.sponsor_name} 제공</span>
-          <h3 className="text-xl font-extrabold text-gray-900 leading-tight mt-1 mb-1.5">{campaign.title}</h3>
-          <p className="text-sm text-gray-500 text-right mb-3">{formatPrizeLine(campaign)}</p>
+        <div className="px-[18px] pt-[18px]">
+          <div className="mb-[7px] text-[11.5px] font-semibold text-accent-dark">
+            Sponsored by {campaign.sponsor_name}
+          </div>
+          <h3 className="mb-2.5 text-[19px] font-extrabold leading-[1.35] tracking-[-0.3px] text-ink">
+            {campaign.title}
+          </h3>
+          <div className="mb-4 flex items-center gap-2 text-[12.5px] font-semibold text-[#5A6068]">
+            <span className="rounded-lg bg-[#F1F3F5] px-2.5 py-1">{formatPrizeLine(campaign)}</span>
+            {campaign.status === 'active' ? (
+              <CountdownTimer endAt={campaign.end_at} className="text-danger" />
+            ) : (
+              <span className="text-gray-400">Entries closed</span>
+            )}
+          </div>
         </div>
       </Link>
 
-      <div className="px-4 flex flex-col gap-2 mb-3">
+      <div className="flex flex-col gap-[9px] px-[18px] pb-5">
         {campaign.options.map((opt) => {
           const percent = campaign.consensus[opt.id] ?? 0;
           const count = campaign.counts[opt.id] ?? 0;
@@ -88,21 +99,21 @@ export default function CampaignCard({ campaign }: { campaign: PublicCampaignWit
               key={opt.id}
               type="button"
               onClick={() => handleOptionClick(opt.id)}
-              className={`w-full text-left rounded-xl border p-3 transition ${
-                selected ? 'border-soda-500 bg-soda-50' : 'border-gray-200 bg-white active:scale-[0.99]'
+              className={`w-full rounded-2xl border-[1.5px] p-3.5 text-left transition ${
+                selected ? 'border-accent bg-accent-light' : 'border-[#ECEDF0] bg-white active:scale-[0.99]'
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`text-sm font-medium truncate ${selected ? 'text-soda-600' : 'text-gray-800'}`}>
+              <div className="mb-[9px] flex items-baseline justify-between">
+                <span className={`truncate text-sm font-bold ${selected ? 'text-accent-dark' : 'text-ink'}`}>
                   {opt.label}
                 </span>
-                <span className="shrink-0 text-xs text-gray-500 tabular-nums">
-                  {count}명 · {percent}%
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-[#8B9199]">
+                  {count} in · {percent}%
                 </span>
               </div>
-              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#F1F3F5]">
                 <div
-                  className={`h-full rounded-full ${selected ? 'bg-soda-500' : 'bg-gray-300'}`}
+                  className={`h-full rounded-full ${selected ? 'bg-accent' : 'bg-gray-300'}`}
                   style={{ width: `${Math.max(percent, 2)}%` }}
                 />
               </div>
@@ -110,14 +121,6 @@ export default function CampaignCard({ campaign }: { campaign: PublicCampaignWit
           );
         })}
       </div>
-
-      <Link href={detailHref} className="block px-4 pb-4 active:opacity-70 transition">
-        {campaign.status === 'active' ? (
-          <CountdownTimer endAt={campaign.end_at} className="text-xs" />
-        ) : (
-          <span className="text-xs text-gray-400">참여가 마감됐어요</span>
-        )}
-      </Link>
     </div>
   );
 }

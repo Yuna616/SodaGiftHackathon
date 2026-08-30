@@ -36,7 +36,7 @@ export default function InviteShareSheet({
   }
 
   const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${token}`;
-  const shareText = `SodaPick에서 "${campaignTitle}" 예측 중! 같이 참여하면 나는 배수가 올라가요`;
+  const shareText = `I'm predicting "${campaignTitle}" on SodaPick! Join me to boost my multiplier`;
 
   async function handleShare() {
     track('invite_link_shared', { participantId, campaignId });
@@ -63,22 +63,22 @@ export default function InviteShareSheet({
 
   return (
     <div className="rounded-2xl border border-soda-100 bg-soda-50/60 p-4">
-      <p className="text-sm font-semibold text-gray-900 mb-1">친구를 초대하면 배수가 올라가요</p>
+      <p className="text-sm font-semibold text-gray-900 mb-1">Invite friends to boost your multiplier</p>
       <p className="text-xs text-gray-500 mb-3">
-        친구 {completedCount}명 초대 완료 → 현재 <span className="text-soda-600 font-semibold">x{multiplier}</span>
+        {completedCount} friend{completedCount !== 1 ? 's' : ''} invited → now <span className="text-soda-600 font-semibold">x{multiplier}</span>
       </p>
       <div className="flex gap-2">
         <button
           onClick={handleShare}
           className="flex-1 rounded-xl bg-black text-white text-sm font-semibold py-2.5 active:scale-[0.98] transition"
         >
-          링크 공유하기
+          Share link
         </button>
         <button
           onClick={handleCopy}
           className="rounded-xl border border-gray-200 text-gray-600 text-sm font-medium px-3.5 py-2.5"
         >
-          {copied ? '복사됨' : '링크 복사'}
+          {copied ? 'Copied' : 'Copy link'}
         </button>
       </div>
     </div>

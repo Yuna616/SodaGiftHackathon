@@ -63,7 +63,7 @@ export default function ClaimProductSelectPage() {
       const data = await res.json();
       setChecking(false);
       if (data.status !== 'ON_SALE') {
-        setNotice('앗, 방금 품절된 상품이에요. 다른 상품을 선택해주세요');
+        setNotice('Oops, this item just sold out. Please choose another one');
         setProducts((prev) =>
           prev.map((p) => (p.id === selectedProduct ? { ...p, stock_status: 'DISCONTINUED' } : p))
         );
@@ -84,7 +84,7 @@ export default function ClaimProductSelectPage() {
   if (isWinner === false) {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-gray-500">이 예측은 당첨 대상이 아니에요</p>
+        <p className="text-sm text-gray-500">This prediction isn't eligible for a prize</p>
       </div>
     );
   }
@@ -99,13 +99,13 @@ export default function ClaimProductSelectPage() {
 
   return (
     <div className="p-4">
-      <p className="text-xs text-gray-400 mb-1">1/3 · 상품 선택</p>
-      <h1 className="text-lg font-bold text-gray-900 mb-1">축하합니다! 🎉</h1>
+      <p className="text-xs text-gray-400 mb-1">1/3 · Choose a prize</p>
+      <h1 className="text-lg font-bold text-gray-900 mb-1">Congratulations! 🎉</h1>
       <p className="text-sm text-gray-500 mb-5">
-        &quot;{campaign.title}&quot; 예측에 성공하셨어요.{' '}
+        Your prediction for &quot;{campaign.title}&quot; was correct.{' '}
         {isCreditMode
-          ? `${campaign.prize_currency} 통화 안에서 원하는 브랜드를 골라주세요`
-          : '받고 싶은 기프티콘을 골라주세요'}
+          ? `Choose any brand within your ${campaign.prize_currency} budget`
+          : 'Choose the gift you\'d like to receive'}
       </p>
 
       {notice && (
@@ -150,7 +150,7 @@ export default function ClaimProductSelectPage() {
         disabled={!selectedProduct || checking}
         className="w-full rounded-xl bg-black text-white font-semibold py-3 text-sm disabled:opacity-40"
       >
-        {checking ? '재고 확인 중...' : '다음'}
+        {checking ? 'Checking stock...' : 'Next'}
       </button>
     </div>
   );

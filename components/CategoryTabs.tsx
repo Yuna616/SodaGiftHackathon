@@ -1,10 +1,10 @@
 const CATEGORIES = [
-  { id: 'all', label: '전체' },
-  { id: 'kpop', label: 'K팝' },
-  { id: 'esports', label: 'e스포츠' },
-  { id: 'variety', label: '예능' },
-  { id: 'drama', label: '드라마' },
-  { id: 'beauty', label: '뷰티' },
+  { id: 'all', label: 'All' },
+  { id: 'kpop', label: 'K-Pop' },
+  { id: 'esports', label: 'Esports' },
+  { id: 'variety', label: 'Variety' },
+  { id: 'drama', label: 'Drama' },
+  { id: 'beauty', label: 'Beauty' },
 ];
 
 export default function CategoryTabs({
@@ -15,15 +15,13 @@ export default function CategoryTabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="flex gap-2 overflow-x-auto px-4 pb-1">
+    <div className="flex gap-2 overflow-x-auto px-1">
       {CATEGORIES.map((c) => (
         <button
           key={c.id}
           onClick={() => onChange(c.id)}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium border ${
-            active === c.id
-              ? 'bg-soda-500 text-white border-soda-500'
-              : 'bg-white text-gray-600 border-gray-200'
+          className={`shrink-0 rounded-full px-4 py-2.5 text-[13.5px] font-bold ${
+            active === c.id ? 'bg-ink text-white' : 'bg-white text-[#5A6068]'
           }`}
         >
           {c.label}

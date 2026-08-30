@@ -119,7 +119,7 @@ export default function CartPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(typeof data.error === 'string' ? data.error : '결제에 실패했어요');
+        setError(typeof data.error === 'string' ? data.error : 'Checkout failed');
         return;
       }
       setResult(data);
@@ -141,12 +141,12 @@ export default function CartPage() {
   if (!participant) {
     return (
       <div className="flex flex-col items-center justify-center p-4 pt-32">
-        <p className="mb-4 text-sm text-gray-500">로그인하면 장바구니를 볼 수 있어요</p>
+        <p className="mb-4 text-sm text-gray-500">Sign in to view your cart</p>
         <button
           onClick={() => signInWithGoogle('/store/cart')}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700"
         >
-          Google 계정으로 로그인
+          Sign in with Google
         </button>
       </div>
     );
@@ -157,13 +157,13 @@ export default function CartPage() {
       <div className="p-4 pt-8 text-center">
         <p className="mb-3 text-4xl">🎁</p>
         <h1 className="mb-1 text-lg font-bold text-gray-900">
-          {result.placedOrders.length}개 상품을 교환했어요!
+          {result.placedOrders.length} item{result.placedOrders.length > 1 ? 's' : ''} redeemed!
         </h1>
-        <p className="mb-6 text-sm text-gray-500">등록하신 이메일로 곧 도착할 거예요</p>
+        <p className="mb-6 text-sm text-gray-500">They'll arrive soon at your registered email</p>
 
         {result.failedItems.length > 0 && (
           <div className="mb-6 rounded-2xl border border-rose-100 bg-rose-50 p-4 text-left">
-            <p className="mb-2 text-sm font-semibold text-rose-700">일부 상품은 처리하지 못했어요</p>
+            <p className="mb-2 text-sm font-semibold text-rose-700">Some items couldn't be processed</p>
             {result.failedItems.map((f) => (
               <p key={f.cartItemId} className="text-xs text-rose-600">
                 {f.productName} — {f.error}
@@ -173,7 +173,7 @@ export default function CartPage() {
         )}
 
         <Link href="/store" className="text-sm font-semibold text-soda-600 underline">
-          스토어 계속 보기
+          Keep browsing the store
         </Link>
       </div>
     );
@@ -182,15 +182,15 @@ export default function CartPage() {
   return (
     <div className="pb-32">
       <div className="px-4 pt-6 pb-3">
-        <h1 className="text-xl font-bold text-gray-900">장바구니</h1>
-        <p className="mt-0.5 text-sm text-gray-500">{items.length}개 상품</p>
+        <h1 className="text-xl font-bold text-gray-900">Cart</h1>
+        <p className="mt-0.5 text-sm text-gray-500">{items.length} item{items.length !== 1 ? 's' : ''}</p>
       </div>
 
       {items.length === 0 ? (
         <div className="p-6 text-center text-sm text-gray-400">
-          장바구니가 비어있어요.
+          Your cart is empty.
           <Link href="/store" className="mt-2 block font-semibold text-soda-600 underline">
-            스토어 구경하기
+            Browse the store
           </Link>
         </div>
       ) : (
@@ -209,7 +209,7 @@ export default function CartPage() {
                   <p className="truncate text-[11px] text-gray-400">{item.brand}</p>
                   <p className="mb-0.5 truncate text-sm font-medium text-gray-800">{item.product_name}</p>
                   <p className="mb-1.5 text-xs text-gray-400">
-                    {item.is_gift ? `🎁 ${item.recipient_email}에게 선물` : '나에게'}
+                    {item.is_gift ? `🎁 Gift to ${item.recipient_email}` : 'For me'}
                   </p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -243,14 +243,14 @@ export default function CartPage() {
           <div className="rounded-2xl bg-gray-50 p-4">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">
-                합계 <span className="text-gray-300">· 보유 약 ${balanceUSD.toFixed(2)}</span>
+                Total <span className="text-gray-300">· ~${balanceUSD.toFixed(2)} available</span>
               </span>
               <span className={`font-bold ${canCheckout ? 'text-gray-900' : 'text-rose-500'}`}>
-                약 ${totalUSD.toFixed(2)}
+                ~${totalUSD.toFixed(2)}
               </span>
             </div>
             <p className="mt-1.5 text-[11px] text-gray-400">
-              서로 다른 통화는 기본 환율로 환산해서 하나의 잔액으로 계산해요(실시간 시세 아님)
+              Different currencies are converted at a default exchange rate into a single balance (not live rates)
             </p>
           </div>
 
@@ -263,7 +263,7 @@ export default function CartPage() {
                 disabled={!canCheckout || checkingOut}
                 className="w-full rounded-xl bg-black py-3 text-sm font-semibold text-white disabled:opacity-40"
               >
-                {checkingOut ? '결제하는 중...' : canCheckout ? '결제하기' : '잔액이 부족해요'}
+                {checkingOut ? 'Processing...' : canCheckout ? 'Checkout' : 'Insufficient balance'}
               </button>
             </div>
           </div>

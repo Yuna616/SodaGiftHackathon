@@ -26,6 +26,20 @@ module.exports = {
           600: "#2ba9c9",
           700: "#1c7f9c",
         },
+        // 리디자인 시안(claude.ai/design) 색상 — 참가자 앱 전용
+        ink: "#14161A",
+        accent: {
+          light: "#E6F8FD",
+          DEFAULT: "#17C1E8",
+          dark: "#0A8FB0",
+        },
+        danger: "#E0453C",
+        success: "#12A150",
+        warning: "#C96A00",
+      },
+      fontFamily: {
+        sodapick: ["var(--font-sodapick)", "Pretendard", "system-ui", "sans-serif"],
+        logo: ["var(--font-logo)", "Pacifico", "cursive"],
       },
     },
   },

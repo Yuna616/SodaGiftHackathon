@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 function formatRemaining(ms: number): string {
-  if (ms <= 0) return '마감';
+  if (ms <= 0) return 'Closed';
   const totalSec = Math.floor(ms / 1000);
   const days = Math.floor(totalSec / 86400);
   const hours = Math.floor((totalSec % 86400) / 3600);
@@ -11,12 +11,12 @@ function formatRemaining(ms: number): string {
   const seconds = totalSec % 60;
 
   const parts: string[] = [];
-  if (days > 0) parts.push(`${days}일`);
-  if (days > 0 || hours > 0) parts.push(`${hours}시간`);
-  if (days > 0 || hours > 0 || minutes > 0) parts.push(`${minutes}분`);
-  parts.push(`${seconds}초`); // 항상 초 단위까지 표기
+  if (days > 0) parts.push(`${days}d`);
+  if (days > 0 || hours > 0) parts.push(`${hours}h`);
+  if (days > 0 || hours > 0 || minutes > 0) parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`); // 항상 초 단위까지 표기
 
-  return `${parts.join(' ')} 남음`;
+  return `${parts.join(' ')} left`;
 }
 
 export default function CountdownTimer({ endAt, className }: { endAt: string; className?: string }) {
