@@ -322,6 +322,9 @@ export default function NewCampaignWizard() {
 
   return (
     <main>
+      <a href="/dashboard" className="mb-3 inline-block text-xs text-slate-400 hover:text-slate-600">
+        ← 대시보드로
+      </a>
       <h1 className="mb-1 text-2xl font-bold text-slate-900">캠페인 생성</h1>
       <p className="mb-6 text-sm text-slate-500">K팝 컴백 예측 캠페인을 만들어요.</p>
 
@@ -736,7 +739,8 @@ export default function NewCampaignWizard() {
             ✓
           </div>
           <h2 className="mb-1 text-lg font-semibold text-slate-900">캠페인이 발행되었습니다</h2>
-          <p className="text-sm text-slate-500">campaign id: {campaignId}</p>
+          <p className="mb-4 text-sm text-slate-500">campaign id: {campaignId}</p>
+          <Button onClick={() => (window.location.href = "/dashboard")}>대시보드로 가기</Button>
         </Card>
       )}
     </main>
