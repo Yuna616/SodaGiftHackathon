@@ -17,13 +17,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   beauty: "뷰티",
 };
 
-export type RoundSummary = {
-  id: string;
-  round_number: number;
-  status: string;
-  reward_mode: "PRODUCT" | "CREDIT";
-};
-
 export type CampaignSummary = {
   id: string;
   title: string;
@@ -33,7 +26,6 @@ export type CampaignSummary = {
   created_at: string;
   starts_at: string | null;
   ends_at: string | null;
-  rounds: RoundSummary[];
   // 콘솔(owner)에서만 내려온다 — public 응답엔 필드 자체가 없음
   failed_claims_count?: number;
 };
@@ -67,12 +59,6 @@ const CAMPAIGN_STATUS_TONE: Record<string, "slate" | "blue" | "green"> = {
   draft: "slate",
   active: "blue",
   ended: "green",
-};
-const ROUND_STATUS_LABEL: Record<string, string> = {
-  upcoming: "예정",
-  open: "진행중",
-  closed_pending_resolution: "판정 대기",
-  resolved: "판정 완료",
 };
 
 type StatusFilter = "all" | "active" | "draft" | "ended";
@@ -533,7 +519,16 @@ function CampaignRow({
 
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          <h4 className="truncate text-sm font-semibold text-slate-900">{campaign.title}</h4>
+          {isOwner ? (
+            <a
+              href={`/campaigns/${campaign.id}/detail`}
+              className="truncate text-sm font-semibold text-slate-900 hover:text-brand-600 hover:underline"
+            >
+              {campaign.title}
+            </a>
+          ) : (
+            <h4 className="truncate text-sm font-semibold text-slate-900">{campaign.title}</h4>
+          )}
           <Badge tone={CAMPAIGN_STATUS_TONE[campaign.status]}>{CAMPAIGN_STATUS_LABEL[campaign.status]}</Badge>
           {campaign.category && <Badge tone="purple">{CATEGORY_LABEL[campaign.category] ?? campaign.category}</Badge>}
           {isOwner && (campaign.failed_claims_count ?? 0) > 0 && (
@@ -547,22 +542,12 @@ function CampaignRow({
             : "기간 미설정"}
         </p>
 
-        <div className="mb-2 flex flex-wrap gap-1.5 text-xs text-slate-500">
-          {campaign.rounds.length === 0 ? (
-            <span>라운드 없음</span>
-          ) : (
-            campaign.rounds.map((r) => (
-              <span key={r.id} className="rounded-full bg-slate-100 px-2 py-0.5">
-                라운드 {r.round_number} · {r.reward_mode === "CREDIT" ? "크레딧" : "상품"} ·{" "}
-                {ROUND_STATUS_LABEL[r.status] ?? r.status}
-              </span>
-            ))
-          )}
-        </div>
-
         <div className="flex items-center gap-3">
           {isOwner ? (
             <>
+              <a href={`/campaigns/${campaign.id}/detail`} className="text-xs font-medium text-brand-600 hover:underline">
+                상세보기
+              </a>
               <a href={`/campaigns/${campaign.id}/rounds`} className="text-xs font-medium text-brand-600 hover:underline">
                 판정 콘솔
               </a>

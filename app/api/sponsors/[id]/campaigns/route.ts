@@ -3,9 +3,9 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// 스폰서 대시보드(PRD 5.1)용 — 프로필 정보 + 통계 + 캠페인 목록(라운드 요약,
-// 실패한 지급 건수 포함)을 한 번에 반환한다. 캠페인별로 다시 조회하지 않고
-// in()으로 배치 조회해서 캠페인 수와 무관하게 쿼리 수를 고정한다.
+// 스폰서 대시보드(PRD 5.1)용 — 프로필 정보 + 통계 + 캠페인 목록(실패한 지급
+// 건수 포함)을 한 번에 반환한다. 캠페인별로 다시 조회하지 않고 in()으로
+// 배치 조회해서 캠페인 수와 무관하게 쿼리 수를 고정한다.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createServiceRoleClient();
 
@@ -32,24 +32,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const campaignIds = (campaigns ?? []).map((c) => c.id);
 
+  // rounds는 화면에 직접 보여줄 일이 없다(캠페인당 라운드 1개뿐이라 목록에서
+  // 따로 표시할 정보가 없음) — 아래 참여자 수 집계에 쓸 round id만 필요하다.
   const [{ data: rounds }, { data: failedClaims }] =
     campaignIds.length > 0
       ? await Promise.all([
-          supabase
-            .from("rounds")
-            .select("id, campaign_id, round_number, status, reward_mode")
-            .in("campaign_id", campaignIds)
-            .order("round_number", { ascending: true }),
+          supabase.from("rounds").select("id").in("campaign_id", campaignIds),
           supabase.from("reward_claims").select("id, campaign_id").in("campaign_id", campaignIds).eq("status", "failed"),
         ])
-      : [{ data: [] as { id: string; campaign_id: string; round_number: number; status: string; reward_mode: string }[] }, { data: [] as { id: string; campaign_id: string }[] }];
+      : [{ data: [] as { id: string }[] }, { data: [] as { id: string; campaign_id: string }[] }];
 
-  const roundsByCampaignId = new Map<string, typeof rounds>();
-  for (const r of rounds ?? []) {
-    const list = roundsByCampaignId.get(r.campaign_id) ?? [];
-    list.push(r);
-    roundsByCampaignId.set(r.campaign_id, list);
-  }
   const failedCountByCampaignId = new Map<string, number>();
   for (const fc of failedClaims ?? []) {
     failedCountByCampaignId.set(fc.campaign_id, (failedCountByCampaignId.get(fc.campaign_id) ?? 0) + 1);
@@ -57,7 +49,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const results = (campaigns ?? []).map((campaign) => ({
     ...campaign,
-    rounds: roundsByCampaignId.get(campaign.id) ?? [],
     failed_claims_count: failedCountByCampaignId.get(campaign.id) ?? 0,
   }));
 

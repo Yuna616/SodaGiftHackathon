@@ -624,9 +624,14 @@ export async function ensureRoundNotifications(roundId: string): Promise<void> {
 
 // 판정 확정 직후(POST /api/rounds/[id]/resolve) 호출 — 정답/오답 참가자 전원에게
 // Win/Lose 결과 알림을 만든다. 정답자에게는 리워드 안내 문구를 함께 넣는다.
+//
+// winnerParticipantIds: 정답자 중 실제로 reward_claims가 생긴(=보상을 받는)
+// 참가자 id 집합. 정답자가 최대 당첨자 수를 넘으면 무작위 선정에서 밀린 정답자가
+// 생길 수 있어서(rounds/[id]/resolve), "정답 맞힘"과 "실제 당첨"을 구분해야 한다.
 export async function createResultNotifications(
   roundId: string,
-  correctOptionIndex: number
+  correctOptionIndex: number,
+  winnerParticipantIds: Set<string>
 ): Promise<void> {
   const supabase = sb();
   const { data: round } = await supabase.from("rounds").select("*").eq("id", roundId).single();
@@ -649,14 +654,23 @@ export async function createResultNotifications(
       : `${round.prize_label ?? "상품"}을 받을 수 있어요.`;
 
   const rows = (predictions ?? []).map((p) => {
-    const isWin = p.selected_option_index === correctOptionIndex;
+    const isCorrect = p.selected_option_index === correctOptionIndex;
+    const isWin = isCorrect && winnerParticipantIds.has(p.participant_id);
+    // 정답은 맞혔지만 최대 당첨자 수 초과로 추첨에서 밀린 경우 — WIN도 LOSE도
+    // 아닌 세 번째 케이스라 is_win은 false로 두되(보상을 못 받으니), 본문은
+    // 그냥 틀린 것과 다르게 안내한다.
+    const missedByDraw = isCorrect && !isWin;
     return {
       participant_id: p.participant_id,
       campaign_id: campaign.id,
       type: "result" as const,
       is_win: isWin,
       title: isWin ? `"${campaign.title}" 결과 발표: WIN` : `"${campaign.title}" 결과 발표: LOSE`,
-      body: isWin ? `축하해요! 예측이 적중했어요. ${rewardText}` : "아쉽지만 이번엔 예측이 빗나갔어요. 다음 이벤트에 도전해보세요.",
+      body: isWin
+        ? `축하해요! 예측이 적중했어요. ${rewardText}`
+        : missedByDraw
+          ? "예측은 적중했지만 아쉽게도 당첨자 추첨에서 밀렸어요."
+          : "아쉽지만 이번엔 예측이 빗나갔어요. 다음 이벤트에 도전해보세요.",
     };
   });
   if (rows.length === 0) return;
