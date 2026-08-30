@@ -2,11 +2,14 @@
 
 // PRD 5.2 캠페인 생성 마법사: 카드 정보 → 상세 화면 → 보상 설정(카탈로그 포함) → 예산 확인 → 발행
 //
+// 캠페인당 예측 질문(투표 세션)은 하나 — 참가자 앱도 캠페인당 라운드 1개
+// (round_number=1)만 본다고 가정해서(lib/repo.ts) 여러 개를 만들 이유가 없다.
+//
 // 1단계(카드 정보)는 참가자 홈 피드 카드에 필요한 것만 — 제목/카테고리/이미지/
 // 질문/옵션/기간. 2단계(상세 화면)는 카드를 눌러 들어갔을 때만 보이는 것 —
 // 판정 기준, 참여 미션 URL. "어떻게 보상할지"(방식/금액/카탈로그)는 3단계에서
-// 따로 다룬다 — 카탈로그 구성도 별도 단계가 아니라 PRODUCT 보상을 고른 라운드가
-// 있을 때만 보상 설정 단계 안에 이어서 나온다(CREDIT만 쓰면 카탈로그 자체가 안 보임).
+// 따로 다룬다 — 카탈로그 구성도 별도 단계가 아니라 PRODUCT 보상을 골랐을 때만
+// 보상 설정 단계 안에 이어서 나온다(CREDIT만 쓰면 카탈로그 자체가 안 보임).
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Callout, Card, Field, Input, Select } from "../../_components/ui";
@@ -28,7 +31,7 @@ type RoundDraft = {
   options: string[];
   resolution_criteria: string;
   reward_mode: RewardMode;
-  expected_winner_count: number; // PRODUCT 모드: 스폰서 직접 입력값
+  expected_winner_count: number; // 최대 당첨자 수 — PRODUCT/CREDIT 공통, 초과 시 무작위 선정
   credit_pool_amount: number; // CREDIT 모드: 라운드에 걸 고정 풀 금액
   credit_currency: string; // CREDIT 모드: 이 통화 안에서 당첨자가 브랜드를 직접 고름
   opens_at: string;
@@ -121,7 +124,7 @@ function emptyRound(n: number): RoundDraft {
     question_text: "",
     options: ["", ""],
     resolution_criteria: "",
-    reward_mode: "PRODUCT",
+    reward_mode: "CREDIT", // 기본값 — 카탈로그 구성 없이 바로 발행할 수 있어 더 빠른 경로
     expected_winner_count: 100,
     credit_pool_amount: 100,
     credit_currency: "",
@@ -208,8 +211,9 @@ export default function NewCampaignWizard() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
 
-  // step 2
-  const [rounds, setRounds] = useState<RoundDraft[]>([emptyRound(1)]);
+  // step 2 — 캠페인당 투표 세션(라운드) 하나. 참가자 앱도 캠페인당 라운드 1개
+  // (round_number=1)만 본다고 가정하고 있어서(lib/repo.ts) 마법사도 여기 맞춘다.
+  const [round, setRound] = useState<RoundDraft>(emptyRound(1));
 
   // step 3
   const [products, setProducts] = useState<Product[]>([]); // 전체 통화 그대로 (CREDIT 통화 선택기가 필요로 함)
@@ -244,9 +248,8 @@ export default function NewCampaignWizard() {
     sufficient: boolean;
   } | null>(null);
 
-  // 참가자 앱 카드는 항상 1번 라운드 기준(앱 전체 가정)이라 미리보기도 rounds[0]만 본다.
   const previewCampaign: PublicCampaignWithConsensus = useMemo(() => {
-    const r = rounds[0];
+    const r = round;
     const options: CampaignOption[] = r.options.map((label, i) => ({
       id: String(i),
       label: label || `옵션 ${i + 1}`,
@@ -273,7 +276,7 @@ export default function NewCampaignWizard() {
       prize_label: r.reward_mode === "CREDIT" ? "크레딧 배당" : "카탈로그 상품 중 선택",
       prize_amount: r.reward_mode === "CREDIT" ? r.credit_pool_amount : null,
       prize_currency: r.reward_mode === "CREDIT" ? r.credit_currency || null : null,
-      winner_count: r.reward_mode === "PRODUCT" ? r.expected_winner_count : null,
+      winner_count: r.expected_winner_count,
       thumbnail_url: imagePreviewUrl ?? "",
       media_url: imagePreviewUrl ?? "",
       media_type: "image",
@@ -282,26 +285,24 @@ export default function NewCampaignWizard() {
       counts: Object.fromEntries(options.map((o) => [o.id, 0])),
       consensus: Object.fromEntries(options.map((o) => [o.id, 0])),
     };
-  }, [rounds, title, category, missionUrl, imagePreviewUrl, sponsorName, campaignId]);
+  }, [round, title, category, missionUrl, imagePreviewUrl, sponsorName, campaignId]);
 
   // 1단계(카드 정보): 제목/카테고리/이미지 + 질문/옵션/기간을 검증하고 캠페인을
   // 만들거나(최초) 이미 만든 draft를 덮어쓴다("이전"으로 돌아왔다가 다시 여기로
   // 온 경우 — 매번 새 draft를 만들면 중복 생성된다).
   async function handleContinueFromCardInfo() {
     if (submitting) return;
-    for (const r of rounds) {
-      if (!r.question_text.trim()) {
-        return setError(`라운드 ${r.round_number}: 질문을 입력해주세요`);
-      }
-      if (r.options.some((o) => !o.trim())) {
-        return setError(`라운드 ${r.round_number}: 빈 옵션이 있어요`);
-      }
-      if (!r.opens_at || !r.closes_at) {
-        return setError(`라운드 ${r.round_number}: 시작/마감 일시를 입력해주세요`);
-      }
-      if (new Date(r.closes_at).getTime() <= new Date(r.opens_at).getTime()) {
-        return setError(`라운드 ${r.round_number}: 마감 일시는 시작 일시보다 뒤여야 합니다`);
-      }
+    if (!round.question_text.trim()) {
+      return setError("질문을 입력해주세요");
+    }
+    if (round.options.some((o) => !o.trim())) {
+      return setError("빈 옵션이 있어요");
+    }
+    if (!round.opens_at || !round.closes_at) {
+      return setError("시작/마감 일시를 입력해주세요");
+    }
+    if (new Date(round.closes_at).getTime() <= new Date(round.opens_at).getTime()) {
+      return setError("마감 일시는 시작 일시보다 뒤여야 합니다");
     }
 
     setSubmitting(true);
@@ -395,61 +396,63 @@ export default function NewCampaignWizard() {
     }
   }
 
-  // 3단계(보상 설정)에서 비로소 라운드를 실제로 저장하고, PRODUCT 라운드가
-  // 하나라도 있으면 카탈로그도 같이 저장한 뒤 예산을 계산한다.
+  // 3단계(보상 설정)에서 비로소 라운드를 실제로 저장하고, PRODUCT 보상이면
+  // 카탈로그도 같이 저장한 뒤 예산을 계산한다.
   async function handleSaveRoundsAndCatalog() {
     if (!campaignId || submitting) return;
+    const r = round;
+
+    if (r.expected_winner_count <= 0) {
+      return setError("최대 당첨자 수는 1 이상이어야 합니다");
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      for (const r of rounds) {
-        const common = {
-          round_number: r.round_number,
-          question_text: r.question_text,
-          options: r.options,
-          resolution_criteria: r.resolution_criteria,
-          opens_at: new Date(r.opens_at).toISOString(),
-          closes_at: new Date(r.closes_at).toISOString(),
-        };
+      const common = {
+        round_number: r.round_number,
+        question_text: r.question_text,
+        options: r.options,
+        resolution_criteria: r.resolution_criteria,
+        expected_winner_count: r.expected_winner_count,
+        opens_at: new Date(r.opens_at).toISOString(),
+        closes_at: new Date(r.closes_at).toISOString(),
+      };
 
-        let payload: Record<string, unknown>;
-        if (r.reward_mode === "PRODUCT") {
-          if (r.expected_winner_count <= 0) {
-            return setError(`라운드 ${r.round_number}: 예상 당첨자 수는 1 이상이어야 합니다`);
-          }
-          payload = { ...common, reward_mode: "PRODUCT", expected_winner_count: r.expected_winner_count };
-        } else {
-          if (r.credit_pool_amount <= 0) {
-            return setError(`라운드 ${r.round_number}: 크레딧 풀 금액은 0보다 커야 합니다`);
-          }
-          if (!r.credit_currency) {
-            return setError(`라운드 ${r.round_number}: 지급 통화를 선택해주세요`);
-          }
-          payload = {
-            ...common,
-            reward_mode: "CREDIT",
-            credit_pool_amount: r.credit_pool_amount,
-            credit_currency: r.credit_currency,
-          };
+      let payload: Record<string, unknown>;
+      if (r.reward_mode === "PRODUCT") {
+        payload = { ...common, reward_mode: "PRODUCT" };
+      } else {
+        if (r.credit_pool_amount <= 0) {
+          return setError("크레딧 풀 금액은 0보다 커야 합니다");
         }
-
-        const res = await fetch(`/api/campaigns/${campaignId}/rounds`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const json = await res.json();
-        if (!res.ok) return setError(JSON.stringify(json.error));
+        if (!r.credit_currency) {
+          return setError("지급 통화를 선택해주세요");
+        }
+        payload = {
+          ...common,
+          reward_mode: "CREDIT",
+          credit_pool_amount: r.credit_pool_amount,
+          credit_currency: r.credit_currency,
+        };
       }
 
-      if (rounds.some((r) => r.reward_mode === "PRODUCT")) {
-        const res = await fetch(`/api/campaigns/${campaignId}/catalog`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/rounds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok) return setError(JSON.stringify(json.error));
+
+      if (r.reward_mode === "PRODUCT") {
+        const catalogRes = await fetch(`/api/campaigns/${campaignId}/catalog`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ product_ids: Array.from(selectedProductIds) }),
         });
-        const json = await res.json();
-        if (!res.ok) return setError(JSON.stringify(json.error));
+        const catalogJson = await catalogRes.json();
+        if (!catalogRes.ok) return setError(JSON.stringify(catalogJson.error));
       }
 
       await handleBudgetCheck();
@@ -535,104 +538,73 @@ export default function NewCampaignWizard() {
             </Field>
           </Card>
 
-          {rounds.map((r, i) => (
-            <Card key={i}>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-slate-900">라운드 {r.round_number}</h2>
-              </div>
+          <Card>
+            <h2 className="mb-4 text-base font-semibold text-slate-900">예측 질문</h2>
 
-              <Field label="질문">
+            <Field label="질문">
+              <Input
+                value={round.question_text}
+                onChange={(e) => setRound({ ...round, question_text: e.target.value })}
+                placeholder="예: 이번 주 1위는 누구일까요?"
+              />
+            </Field>
+
+            <div className="mb-2 flex flex-col gap-2">
+              {round.options.map((opt, oi) => (
+                <div key={oi} className="flex items-center gap-2">
+                  <Input
+                    placeholder={`옵션 ${oi + 1}`}
+                    value={opt}
+                    className="flex-1"
+                    onChange={(e) => {
+                      const opts = [...round.options];
+                      opts[oi] = e.target.value;
+                      setRound({ ...round, options: opts });
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={round.options.length <= MIN_OPTIONS}
+                    onClick={() =>
+                      setRound({ ...round, options: round.options.filter((_, idx) => idx !== oi) })
+                    }
+                    className="shrink-0 text-xs font-medium text-slate-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mb-4">
+              <button
+                type="button"
+                disabled={round.options.length >= MAX_OPTIONS}
+                onClick={() => setRound({ ...round, options: [...round.options, ""] })}
+                className="text-xs font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-slate-300 disabled:no-underline"
+              >
+                + 옵션 추가
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="시작 일시">
                 <Input
-                  value={r.question_text}
-                  onChange={(e) => {
-                    const next = [...rounds];
-                    next[i] = { ...r, question_text: e.target.value };
-                    setRounds(next);
-                  }}
-                  placeholder="예: 이번 주 1위는 누구일까요?"
+                  type="datetime-local"
+                  value={round.opens_at}
+                  onChange={(e) => setRound({ ...round, opens_at: e.target.value })}
                 />
               </Field>
+              <Field label="마감 일시">
+                <Input
+                  type="datetime-local"
+                  value={round.closes_at}
+                  onChange={(e) => setRound({ ...round, closes_at: e.target.value })}
+                />
+              </Field>
+            </div>
+          </Card>
 
-              <div className="mb-2 flex flex-col gap-2">
-                {r.options.map((opt, oi) => (
-                  <div key={oi} className="flex items-center gap-2">
-                    <Input
-                      placeholder={`옵션 ${oi + 1}`}
-                      value={opt}
-                      className="flex-1"
-                      onChange={(e) => {
-                        const next = [...rounds];
-                        const opts = [...r.options];
-                        opts[oi] = e.target.value;
-                        next[i] = { ...r, options: opts };
-                        setRounds(next);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={r.options.length <= MIN_OPTIONS}
-                      onClick={() => {
-                        const next = [...rounds];
-                        next[i] = { ...r, options: r.options.filter((_, idx) => idx !== oi) };
-                        setRounds(next);
-                      }}
-                      className="shrink-0 text-xs font-medium text-slate-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="mb-4">
-                <button
-                  type="button"
-                  disabled={r.options.length >= MAX_OPTIONS}
-                  onClick={() => {
-                    const next = [...rounds];
-                    next[i] = { ...r, options: [...r.options, ""] };
-                    setRounds(next);
-                  }}
-                  className="text-xs font-medium text-brand-600 hover:underline disabled:cursor-not-allowed disabled:text-slate-300 disabled:no-underline"
-                >
-                  + 옵션 추가
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="시작 일시">
-                  <Input
-                    type="datetime-local"
-                    value={r.opens_at}
-                    onChange={(e) => {
-                      const next = [...rounds];
-                      next[i] = { ...r, opens_at: e.target.value };
-                      setRounds(next);
-                    }}
-                  />
-                </Field>
-                <Field label="마감 일시">
-                  <Input
-                    type="datetime-local"
-                    value={r.closes_at}
-                    onChange={(e) => {
-                      const next = [...rounds];
-                      next[i] = { ...r, closes_at: e.target.value };
-                      setRounds(next);
-                    }}
-                  />
-                </Field>
-              </div>
-            </Card>
-          ))}
-
-          <div className="flex items-center justify-between">
-            <Button
-              variant="secondary"
-              onClick={() => setRounds([...rounds, emptyRound(rounds.length + 1)])}
-              disabled={submitting}
-            >
-              + 라운드 추가
-            </Button>
+          <div className="flex justify-end">
             <Button onClick={handleContinueFromCardInfo} disabled={!title || submitting}>
               {imageUploading ? "이미지 업로드 중..." : submitting ? "저장 중..." : "다음"}
             </Button>
@@ -644,26 +616,20 @@ export default function NewCampaignWizard() {
         <div className="space-y-4">
           <Callout tone="slate">여기서부터는 참가자가 카드를 눌러 들어갔을 때만 보이는 내용이에요.</Callout>
 
-          {rounds.map((r, i) => (
-            <Card key={i}>
-              <h2 className="mb-4 text-base font-semibold text-slate-900">
-                라운드 {r.round_number} <span className="font-normal text-slate-400">— {r.question_text || "(질문 미입력)"}</span>
-              </h2>
-              <Field label="판정 기준" hint="참가자 상세 화면에 그대로 노출돼요. 모호하면 발행 전 검토 단계에서 놓치기 쉬워요.">
-                <textarea
-                  value={r.resolution_criteria}
-                  onChange={(e) => {
-                    const next = [...rounds];
-                    next[i] = { ...r, resolution_criteria: e.target.value };
-                    setRounds(next);
-                  }}
-                  placeholder="예: 멜론차트 이번 주 금요일 오후 6시 기준 1위 곡"
-                  rows={2}
-                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                />
-              </Field>
-            </Card>
-          ))}
+          <Card>
+            <h2 className="mb-4 text-base font-semibold text-slate-900">
+              판정 기준 <span className="font-normal text-slate-400">— {round.question_text || "(질문 미입력)"}</span>
+            </h2>
+            <Field label="판정 기준" hint="참가자 상세 화면에 그대로 노출돼요. 모호하면 발행 전 검토 단계에서 놓치기 쉬워요.">
+              <textarea
+                value={round.resolution_criteria}
+                onChange={(e) => setRound({ ...round, resolution_criteria: e.target.value })}
+                placeholder="예: 멜론차트 이번 주 금요일 오후 6시 기준 1위 곡"
+                rows={2}
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </Field>
+          </Card>
 
           <Card>
             <Field
@@ -693,99 +659,86 @@ export default function NewCampaignWizard() {
 
       {step === 3 && (
         <div className="space-y-4">
-          {rounds.map((r, i) => (
-            <Card key={i}>
-              <h2 className="mb-4 text-base font-semibold text-slate-900">
-                라운드 {r.round_number} 보상 <span className="font-normal text-slate-400">— {r.question_text || "(질문 미입력)"}</span>
-              </h2>
+          <Card>
+            <h2 className="mb-4 text-base font-semibold text-slate-900">
+              보상 설정 <span className="font-normal text-slate-400">— {round.question_text || "(질문 미입력)"}</span>
+            </h2>
 
-              <div className="mb-4">
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">보상 방식</label>
-                <div className="inline-flex rounded-lg border border-slate-300 p-0.5">
-                  {(
-                    [
-                      ["PRODUCT", "상품 지급"],
-                      ["CREDIT", "크레딧 배당"],
-                    ] as const
-                  ).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => {
-                        const next = [...rounds];
-                        next[i] = { ...r, reward_mode: mode };
-                        setRounds(next);
-                      }}
-                      className={
-                        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-                        (r.reward_mode === mode ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100")
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            <div className="mb-4">
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">보상 방식</label>
+              <div className="inline-flex rounded-lg border border-slate-300 p-0.5">
+                {(
+                  [
+                    ["CREDIT", "크레딧 배당"],
+                    ["PRODUCT", "상품 지급"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setRound({ ...round, reward_mode: mode })}
+                    className={
+                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                      (round.reward_mode === mode ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100")
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {r.reward_mode === "PRODUCT" ? (
-                <Field label="예상 당첨자 수" hint="직접 입력, 예산 게이트 계산에 쓰여요 (자동 계산 아님). 아래에서 지급할 카탈로그 상품도 골라주세요.">
-                  <Input
-                    type="number"
-                    min={1}
-                    className="max-w-[160px]"
-                    value={r.expected_winner_count}
-                    onChange={(e) => {
-                      const next = [...rounds];
-                      next[i] = { ...r, expected_winner_count: Number(e.target.value) };
-                      setRounds(next);
-                    }}
-                  />
-                </Field>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="풀 금액">
-                      <Input
-                        type="number"
-                        min={1}
-                        value={r.credit_pool_amount}
-                        onChange={(e) => {
-                          const next = [...rounds];
-                          next[i] = { ...r, credit_pool_amount: Number(e.target.value) };
-                          setRounds(next);
-                        }}
-                      />
-                    </Field>
-                    <Field label="지급 통화">
-                      <Select
-                        value={r.credit_currency}
-                        onChange={(e) => {
-                          const next = [...rounds];
-                          next[i] = { ...r, credit_currency: e.target.value };
-                          setRounds(next);
-                        }}
-                      >
-                        <option value="">선택하세요</option>
-                        {Array.from(new Set(products.map((p) => p.currency)))
-                          .sort()
-                          .map((currency) => (
-                            <option key={currency} value={currency}>
-                              {currencyLabel(currency)}
-                            </option>
-                          ))}
-                      </Select>
-                    </Field>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    브랜드 상품권을 고르지 않아요. 판정 확정 즉시 풀 금액을 정답자 수로 나눈 몫이 정답자
-                    마이페이지의 &quot;누적 획득 리워드&quot;에 바로 더해져요 — 참가자가 따로 할 일이 없어요.
-                  </p>
-                </>
-              )}
-            </Card>
-          ))}
+            <Field
+              label="최대 당첨자 수"
+              hint="정답자가 이 수를 넘으면 판정 확정 시점에 무작위로 당첨자를 뽑아요."
+            >
+              <Input
+                type="number"
+                min={1}
+                className="max-w-[160px]"
+                value={round.expected_winner_count}
+                onChange={(e) => setRound({ ...round, expected_winner_count: Number(e.target.value) })}
+              />
+            </Field>
 
-          {rounds.some((r) => r.reward_mode === "PRODUCT") &&
+            {round.reward_mode === "PRODUCT" ? (
+              <p className="mb-1 text-xs text-slate-500">예산 게이트 계산에도 쓰여요. 아래에서 지급할 카탈로그 상품을 골라주세요.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="풀 금액">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={round.credit_pool_amount}
+                      onChange={(e) => setRound({ ...round, credit_pool_amount: Number(e.target.value) })}
+                    />
+                  </Field>
+                  <Field label="지급 통화">
+                    <Select
+                      value={round.credit_currency}
+                      onChange={(e) => setRound({ ...round, credit_currency: e.target.value })}
+                    >
+                      <option value="">선택하세요</option>
+                      {Array.from(new Set(products.map((p) => p.currency)))
+                        .sort()
+                        .map((currency) => (
+                          <option key={currency} value={currency}>
+                            {currencyLabel(currency)}
+                          </option>
+                        ))}
+                    </Select>
+                  </Field>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  브랜드 상품권을 고르지 않아요. 판정 확정 즉시 풀 금액을 실제 당첨자 수로 나눈 몫이 당첨자
+                  마이페이지의 &quot;누적 획득 리워드&quot;에 바로 더해져요 — 참가자가 따로 할 일이 없어요.
+                </p>
+              </>
+            )}
+          </Card>
+
+          {round.reward_mode === "PRODUCT" &&
             (() => {
               // 고정가 카탈로그는 잔액 통화 상품만 — 통화가 섞이면 예산 게이트
               // 평균 단가가 의미 없어진다(위 handleContinueFromCardInfo 주석 참고).

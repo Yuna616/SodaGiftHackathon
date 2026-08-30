@@ -21,9 +21,9 @@ type PendingAction = 'submit' | 'visit' | null;
 function formatPrizeLine(campaign: PublicCampaignWithConsensus): string {
   const reward =
     campaign.prize_type === 'amount' && campaign.prize_amount
-      ? `${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? '원'}`
+      ? `${campaign.prize_currency ?? 'KRW'} ${campaign.prize_amount.toLocaleString()}`
       : `🎁 ${campaign.prize_label}`;
-  return campaign.winner_count !== null ? `${reward} · 최대 ${campaign.winner_count}명` : reward;
+  return campaign.winner_count !== null ? `${reward} · up to ${campaign.winner_count} winners` : reward;
 }
 
 export default function CampaignDetailPage() {
@@ -174,7 +174,7 @@ function CampaignDetailContent() {
           focusMissionSection();
           return;
         }
-        setError(data.error === 'CAMPAIGN_CLOSED' ? '이미 마감된 캠페인입니다' : '제출에 실패했습니다');
+        setError(data.error === 'CAMPAIGN_CLOSED' ? 'This campaign has already closed' : 'Submission failed');
         setStage('confirm');
         return;
       }
@@ -184,7 +184,7 @@ function CampaignDetailContent() {
       setStage(data.alreadySubmitted ? 'already' : 'done');
       if (data.alreadySubmitted) setSelected(data.prediction.selected_option);
     } catch {
-      setError('네트워크 오류가 발생했어요. 다시 시도해주세요');
+      setError('A network error occurred. Please try again');
       setStage('confirm');
     }
   }
@@ -272,26 +272,26 @@ function CampaignDetailContent() {
       if (stage === 'done' || stage === 'already') {
         return {
           variant: 'muted',
-          label: '결과는 마이페이지에서 확인하세요',
+          label: 'Check the results on My Page',
           onClick: () => router.push('/my'),
         };
       }
-      return { variant: 'muted', label: '이미 마감된 캠페인입니다', onClick: () => {} };
+      return { variant: 'muted', label: 'This campaign has already closed', onClick: () => {} };
     }
     if (stage === 'done' || stage === 'already') {
       return {
         variant: 'invite',
-        label: '친구 초대하고 배수 올리기',
+        label: 'Invite friends to boost your multiplier',
         onClick: () => inviteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
       };
     }
     if (stage === 'submitting') {
-      return { variant: 'muted', label: '제출 중이에요...', onClick: () => {} };
+      return { variant: 'muted', label: 'Submitting...', onClick: () => {} };
     }
     if (!selected) {
       return {
         variant: 'muted',
-        label: '옵션을 선택해주세요',
+        label: 'Please select an option',
         onClick: () => optionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
       };
     }
@@ -324,7 +324,7 @@ function CampaignDetailContent() {
           )
         ) : null}
         <button
-          onClick={() => router.push('/')}
+          onClick={() => router.back()}
           className="absolute top-3 left-3 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center text-sm backdrop-blur"
         >
           ←
@@ -333,7 +333,7 @@ function CampaignDetailContent() {
 
       <div className="p-4 border-b border-gray-100">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-soda-600 bg-soda-50 rounded-full px-2.5 py-1">
-          {campaign.sponsor_name} 제공
+          Presented by {campaign.sponsor_name}
         </span>
         <h1 className="text-2xl font-extrabold text-gray-900 leading-snug mt-2 mb-1">{campaign.title}</h1>
         <p className="text-sm text-gray-500 text-right mb-3">{formatPrizeLine(campaign)}</p>
@@ -341,10 +341,10 @@ function CampaignDetailContent() {
           {campaign.status === 'active' ? (
             <CountdownTimer endAt={campaign.end_at} />
           ) : (
-            <span className="text-gray-400">참여 마감</span>
+            <span className="text-gray-400">Closed</span>
           )}
           <span>·</span>
-          <span>{campaign.total_predictions}명 참여중</span>
+          <span>{campaign.total_predictions} participating</span>
         </div>
       </div>
 
@@ -357,6 +357,7 @@ function CampaignDetailContent() {
               key={opt.id}
               label={opt.label}
               percent={campaign.consensus[opt.id] ?? 0}
+              count={campaign.counts[opt.id] ?? 0}
               selected={selected === opt.id}
               disabled={closed || stage === 'already' || stage === 'done' || stage === 'submitting'}
               onClick={() => {
@@ -368,7 +369,7 @@ function CampaignDetailContent() {
         </div>
 
         <div className="mb-5">
-          <p className="text-xs font-semibold text-gray-500 mb-2">선택 비중 추이</p>
+          <p className="text-xs font-semibold text-gray-500 mb-2">Pick share over time</p>
           <ConsensusTrendChart options={campaign.options} points={trend} />
         </div>
 
@@ -382,24 +383,24 @@ function CampaignDetailContent() {
             {gateCleared ? (
               <>
                 <p className="text-sm font-semibold text-gray-900 mb-3">
-                  ✓ {campaign.sponsor_name} 페이지 방문을 완료했어요
+                  ✓ You've visited {campaign.sponsor_name}'s page
                 </p>
                 <button disabled className="w-full rounded-xl bg-gray-100 text-gray-400 font-semibold py-3 text-sm">
-                  페이지 방문 완료
+                  Page visit complete
                 </button>
               </>
             ) : (
               <>
                 <p className={`text-sm mb-3 ${missionHighlight ? 'text-rose-600 font-semibold' : 'text-gray-700'}`}>
                   {missionHighlight
-                    ? '해당 페이지를 방문하셔야 참여하실 수 있습니다'
-                    : `${campaign.sponsor_name}가 준비한 페이지를 방문하면 PICK에 참여할 수 있어요`}
+                    ? 'You need to visit this page to participate'
+                    : `Visit the page ${campaign.sponsor_name} prepared to join the PICK`}
                 </p>
                 <button
                   onClick={handleMissionVisitClick}
                   className="w-full rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700"
                 >
-                  {campaign.sponsor_name} 이벤트 페이지 방문하기
+                  Visit {campaign.sponsor_name}'s event page
                 </button>
               </>
             )}
@@ -408,20 +409,20 @@ function CampaignDetailContent() {
 
         {stage !== 'done' && stage !== 'already' && campaign.prize_type === 'amount' && (
           <div className="mb-5 rounded-2xl bg-soda-50 border border-soda-100 p-4">
-            <p className="text-sm font-bold text-soda-700 mb-1.5">🎉 당첨 시 받을 수 있는 보상</p>
+            <p className="text-sm font-bold text-soda-700 mb-1.5">🎉 Reward if you win</p>
             <p className="text-base text-gray-800 leading-relaxed">
-              정답자들이{' '}
+              Winners split{' '}
               <span className="font-extrabold text-soda-600">
-                {campaign.prize_amount?.toLocaleString()}{campaign.prize_currency}
+                {campaign.prize_currency} {campaign.prize_amount?.toLocaleString()}
               </span>
-              을 N분의 1로 나눠 가져요.
+              {' '}evenly.
             </p>
           </div>
         )}
 
         {products.length > 0 && stage !== 'done' && stage !== 'already' && campaign.prize_type === 'item' && (
           <div className="mb-5 rounded-2xl bg-soda-50 border border-soda-100 p-4">
-            <p className="text-sm font-bold text-soda-700 mb-2">🎉 당첨 시 받을 수 있는 상품 미리보기</p>
+            <p className="text-sm font-bold text-soda-700 mb-2">🎉 Preview of prizes if you win</p>
             <div className="flex gap-2 flex-wrap">
               {products.map((p) => (
                 <span
@@ -440,21 +441,21 @@ function CampaignDetailContent() {
         )}
 
         {stage === 'submitting' && (
-          <div className="text-center py-6 text-sm text-gray-400">제출 중이에요...</div>
+          <div className="text-center py-6 text-sm text-gray-400">Submitting...</div>
         )}
 
         {(stage === 'done' || stage === 'already') && participantId && (
           <div ref={inviteRef} className="flex flex-col gap-4">
             <div className="rounded-2xl bg-soda-50 border border-soda-100 p-4 text-center">
               <p className="text-sm font-semibold text-soda-700">
-                {stage === 'already' ? '이미 참여하셨어요' : '예측 제출 완료!'}
+                {stage === 'already' ? "You've already participated" : 'Prediction submitted!'}
               </p>
               <p className="text-xs text-soda-600 mt-1">
-                {campaign.options.find((o) => o.id === selected)?.label}에 예측했어요. 결과는 마이페이지에서
-                확인할 수 있어요.
+                You predicted {campaign.options.find((o) => o.id === selected)?.label}. Check the results on
+                My Page.
               </p>
               <Link href="/my" className="inline-block mt-3 text-xs font-semibold text-soda-700 underline">
-                마이페이지로 이동
+                Go to My Page
               </Link>
             </div>
             {!closed && (

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import CategoryTabs from '@/components/CategoryTabs';
 import CampaignCard from '@/components/CampaignCard';
-import NotificationBell from '@/components/NotificationBell';
+import Logo from '@/components/Logo';
 import type { CampaignSort, PublicCampaignWithConsensus } from '@/lib/types';
 
 export default function HomePage() {
@@ -26,45 +26,51 @@ export default function HomePage() {
 
   return (
     <div>
-      <header className="px-4 pt-6 pb-3 flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">SodaPick</h1>
-          <p className="text-sm text-gray-500 mt-0.5">무료로 예측하고, 진짜 기프티콘을 받아보세요</p>
+      <header className="px-5 pt-3.5 pb-0">
+        <div className="flex items-center justify-between">
+          <Logo />
+          <button
+            type="button"
+            aria-label="Search"
+            className="grid h-[38px] w-[38px] place-items-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,.08)]"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#14161A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
+            </svg>
+          </button>
         </div>
-        <NotificationBell variant="light" />
+
+        <div className="my-4">
+          <CategoryTabs active={category} onChange={setCategory} />
+        </div>
+
+        <div className="flex gap-3.5 pb-1 text-[13px] font-semibold text-[#9AA0A8]">
+          {(
+            [
+              { id: 'recommended', label: 'Recommended' },
+              { id: 'ending', label: 'Closing soon' },
+              { id: 'popular', label: 'Popular' },
+            ] as const
+          ).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSort(s.id)}
+              className={sort === s.id ? 'border-b-2 border-ink pb-[3px] text-ink' : ''}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </header>
 
-      <div className="mb-3">
-        <CategoryTabs active={category} onChange={setCategory} />
-      </div>
-
-      <div className="flex gap-2 px-4 mb-3">
-        {(
-          [
-            { id: 'recommended', label: '추천순' },
-            { id: 'ending', label: '마감임박순' },
-            { id: 'popular', label: '인기순' },
-          ] as const
-        ).map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setSort(s.id)}
-            className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
-              sort === s.id ? 'border-soda-500 text-soda-600' : 'border-gray-200 text-gray-400'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="px-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-4 px-5 pt-3.5">
         {campaigns === null &&
           [0, 1].map((i) => (
-            <div key={i} className="h-96 rounded-2xl bg-gray-100 animate-pulse" />
+            <div key={i} className="h-96 rounded-3xl bg-gray-100 animate-pulse" />
           ))}
         {campaigns !== null && campaigns.length === 0 && (
-          <div className="py-16 text-center text-sm text-gray-400">진행 중인 캠페인이 없습니다</div>
+          <div className="py-16 text-center text-sm text-gray-400">No campaigns are running right now</div>
         )}
         {campaigns?.map((c) => (
           <CampaignCard key={c.id} campaign={c} />
@@ -73,7 +79,7 @@ export default function HomePage() {
 
       <div className="px-4 py-8 text-center">
         <a href="/dashboard" className="text-xs text-gray-300 underline">
-          스폰서로 로그인
+          Sponsor login
         </a>
       </div>
     </div>

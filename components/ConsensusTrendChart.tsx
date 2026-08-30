@@ -14,7 +14,7 @@ const PLOT_H = HEIGHT - PAD_TOP - PAD_BOTTOM;
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ConsensusTrendChart({
@@ -27,7 +27,7 @@ export default function ConsensusTrendChart({
   if (points.length < 2) {
     return (
       <div className="rounded-xl bg-gray-50 py-10 text-center text-xs text-gray-400">
-        추이를 표시할 만큼 예측 데이터가 아직 없어요
+        Not enough prediction data yet to show a trend
       </div>
     );
   }
@@ -50,7 +50,7 @@ export default function ConsensusTrendChart({
 
   return (
     <div>
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img" aria-label="옵션별 선택 비중 추이">
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img" aria-label="Pick share trend by option">
         {[0, 50, 100].map((g) => (
           <g key={g}>
             <line

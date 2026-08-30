@@ -1,12 +1,14 @@
 export default function ConsensusBar({
   label,
   percent,
+  count,
   selected,
   disabled,
   onClick,
 }: {
   label: string;
   percent: number;
+  count?: number;
   selected?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -22,7 +24,10 @@ export default function ConsensusBar({
     >
       <div className="flex items-center justify-between mb-1.5">
         <span className={`text-sm font-medium ${selected ? 'text-soda-600' : 'text-gray-800'}`}>{label}</span>
-        <span className="text-xs text-gray-500 tabular-nums">{percent}%</span>
+        <span className="text-xs text-gray-500 tabular-nums">
+          {count !== undefined ? `${count} · ` : ''}
+          {percent}%
+        </span>
       </div>
       <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
         <div

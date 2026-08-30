@@ -19,11 +19,11 @@ interface RawClaim {
 }
 
 const STATUS_LABEL: Record<RawClaim['status'], string> = {
-  eligible: '대기중',
-  product_selected: '상품 선택됨',
-  order_placed: '주문 완료',
-  fulfilled: '지급 완료',
-  failed: '실패',
+  eligible: 'Pending',
+  product_selected: 'Product selected',
+  order_placed: 'Order placed',
+  fulfilled: 'Fulfilled',
+  failed: 'Failed',
 };
 
 function formatUsd(amount: number): string {
@@ -31,7 +31,7 @@ function formatUsd(amount: number): string {
 }
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('ko-KR', {
+  return new Date(iso).toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -87,9 +87,9 @@ export default function RewardDetailPage() {
   if (notFound) {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-gray-400 mb-4">리워드 정보를 찾을 수 없어요</p>
+        <p className="text-sm text-gray-400 mb-4">Reward information not found</p>
         <button onClick={() => router.push('/my')} className="text-sm text-soda-600 font-semibold underline">
-          마이페이지로
+          Go to My Page
         </button>
       </div>
     );
@@ -108,7 +108,7 @@ export default function RewardDetailPage() {
   return (
     <div className="p-4">
       <button onClick={() => router.push('/my')} className="text-sm text-gray-400 mb-4">
-        ← 마이페이지
+        ← My Page
       </button>
 
       <div className="rounded-2xl border border-gray-200 p-4 mb-5">
@@ -120,7 +120,7 @@ export default function RewardDetailPage() {
             <div className="h-14 w-14 shrink-0 rounded-xl bg-gray-100" />
           )}
           <div className="min-w-0">
-            <p className="text-base font-semibold text-gray-900 truncate">{product?.name ?? '상품 정보 확인 중'}</p>
+            <p className="text-base font-semibold text-gray-900 truncate">{product?.name ?? 'Checking product info'}</p>
             <p className="text-xs text-gray-400 mt-0.5">{product?.brand ?? campaign?.title}</p>
           </div>
         </div>
@@ -144,13 +144,13 @@ export default function RewardDetailPage() {
 
       {campaign && (
         <div className="rounded-xl bg-gray-50 p-3 mb-5">
-          <p className="text-xs font-semibold text-gray-500 mb-1">획득한 이벤트</p>
+          <p className="text-xs font-semibold text-gray-500 mb-1">Won from</p>
           <p className="text-sm text-gray-800">{campaign.title}</p>
         </div>
       )}
 
       <div className="mb-5">
-        <p className="text-xs font-semibold text-gray-500 mb-2">히스토리</p>
+        <p className="text-xs font-semibold text-gray-500 mb-2">History</p>
         <div className="flex flex-col gap-3">
           <div className="flex gap-3">
             <div className="flex flex-col items-center pt-1">
@@ -158,7 +158,7 @@ export default function RewardDetailPage() {
               {hasHistoryStep && <span className="w-px flex-1 bg-gray-200 mt-1" />}
             </div>
             <div className="pb-3">
-              <p className="text-sm text-gray-800">리워드 확정</p>
+              <p className="text-sm text-gray-800">Reward confirmed</p>
               <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(claim.created_at)}</p>
             </div>
           </div>
@@ -177,8 +177,8 @@ export default function RewardDetailPage() {
       </div>
 
       <div className="rounded-xl border border-gray-100 p-3 text-[11px] text-gray-400 space-y-1 break-all">
-        <p>참조번호 {claim.external_reference_id}</p>
-        {claim.soda_order_id && <p>주문번호 {claim.soda_order_id}</p>}
+        <p>Reference no. {claim.external_reference_id}</p>
+        {claim.soda_order_id && <p>Order no. {claim.soda_order_id}</p>}
       </div>
     </div>
   );

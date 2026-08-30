@@ -26,9 +26,9 @@ export default function InviteLandingPage() {
   if (error) {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-gray-500 mb-4">유효하지 않거나 만료된 초대 링크예요</p>
+        <p className="text-sm text-gray-500 mb-4">This invite link is invalid or has expired</p>
         <button onClick={() => router.push('/')} className="text-sm text-soda-600 font-semibold underline">
-          캠페인 둘러보기
+          Browse campaigns
         </button>
       </div>
     );
@@ -37,7 +37,7 @@ export default function InviteLandingPage() {
   return (
     <div className="p-6 text-center">
       <p className="text-2xl mb-3">🎉</p>
-      <p className="text-sm font-medium text-gray-700">친구가 초대한 캠페인으로 이동할게요</p>
+      <p className="text-sm font-medium text-gray-700">Taking you to the campaign your friend invited you to</p>
     </div>
   );
 }

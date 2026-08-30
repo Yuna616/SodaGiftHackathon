@@ -14,9 +14,11 @@ function toDisplayProduct(p: SodaProduct): Product {
     name: p.name_ko ?? p.name,
     brand: p.brand?.name ?? p.category.name,
     price: p.amount ?? 0,
+    currency: p.currency,
     country_code: p.country_code ?? "KR",
     stock_status: p.availability === "ON_SALE" ? "ON_SALE" : "DISCONTINUED",
     image_url: p.image_url,
+    type: p.type,
   };
 }
 
