@@ -215,16 +215,24 @@ export default function MyPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {predictions.map((p) => {
+              // 당첨됐는데 아직 리워드를 안 받은(claimOrder 없는) 경우엔 캠페인
+              // 상세로 보내는 대신 클레임 플로우로 바로 이어준다 — 안 그러면
+              // "Win" 뱃지만 뜨고 실제로 리워드를 받으러 갈 방법이 없었다.
+              const needsClaim = p.isResolved && p.isWinner && !p.claimOrder;
               const label = !p.isResolved
                 ? { text: '진행중', className: 'bg-blue-50 text-blue-500' }
                 : p.isWinner
-                  ? { text: 'Win', className: 'bg-amber-100 text-amber-700' }
+                  ? needsClaim
+                    ? { text: '리워드 받기 →', className: 'bg-soda-500 text-white' }
+                    : { text: 'Win', className: 'bg-amber-100 text-amber-700' }
                   : { text: 'Lose', className: 'bg-gray-100 text-gray-400' };
               return (
                 <Link
                   key={p.id}
-                  href={`/campaigns/${p.campaign.id}`}
-                  className="flex items-center justify-between rounded-xl border border-gray-200 p-3 active:bg-gray-50 transition"
+                  href={needsClaim ? `/claim/${p.id}` : `/campaigns/${p.campaign.id}`}
+                  className={`flex items-center justify-between rounded-xl border p-3 active:bg-gray-50 transition ${
+                    needsClaim ? 'border-soda-300 bg-soda-50' : 'border-gray-200'
+                  }`}
                 >
                   <div className="min-w-0">
                     <p className="text-sm text-gray-800 truncate">{p.campaign.title}</p>

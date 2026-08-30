@@ -71,7 +71,7 @@ export default function HomePage() {
       </div>
 
       <div className="px-4 py-8 text-center">
-        <a href="/campaigns/new" className="text-xs text-gray-300 underline">
+        <a href="/dashboard" className="text-xs text-gray-300 underline">
           스폰서로 로그인
         </a>
       </div>

@@ -121,10 +121,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // 4) 정답자만 reward_claims 생성 (FR-6: external_reference_id로 중복지급 방지)
-  //    두 모드 다 eligible로 대기시키고 실제 주문은 참가자가 상품을 고르는
-  //    /api/claims/[id]/confirm에서 처리한다 — CREDIT이라고 여기서 자동 주문하지
-  //    않는 이유: 소다기프트엔 범용 현금이 없어서 어차피 특정 브랜드 상품권을
-  //    골라야 하고, 그 선택은 스폰서가 아니라 당첨자 본인이 해야 한다.
+  //
+  //    PRODUCT 모드: 아직 어떤 카탈로그 상품을 받을지 안 정해졌으니 eligible로
+  //    대기시키고, 참가자가 직접 고르는 /api/claims/[id]/confirm(또는 참가자
+  //    쪽 /api/orders)에서 실제 소다기프트 주문을 넣는다.
+  //
+  //    CREDIT 모드: 소다기프트엔 범용 현금이 없어서 "돈"을 실제로 지급하는
+  //    소다기프트 주문은 애초에 존재하지 않는다 — 그래서 브랜드를 고르게
+  //    하지 않고, 판정 즉시 fulfilled로 확정해서 마이페이지 "누적 획득
+  //    리워드"에 바로 더해지게 한다(지갑에 돈이 쌓이는 형태). 참가자가
+  //    고를 게 없다. soda_order_id는 실제 주문이 없으니 계속 null.
   if (correctPredictions.length > 0) {
     const payoutAmount =
       round.reward_mode === "CREDIT" ? (round.credit_pool_amount ?? 0) / correctPredictions.length : null;
@@ -133,7 +139,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       round_id: params.id,
       campaign_id: round.campaign_id,
       participant_id: p.participant_id,
-      status: "eligible" as const,
+      status: round.reward_mode === "CREDIT" ? ("fulfilled" as const) : ("eligible" as const),
       external_reference_id: buildExternalReferenceId(round.campaign_id, params.id, p.participant_id),
       payout_amount: payoutAmount,
       payout_currency: round.reward_mode === "CREDIT" ? round.credit_currency : null,
