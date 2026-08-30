@@ -1,0 +1,34 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+const TABS = [
+  { href: '/', label: '캠페인', icon: '🏠' },
+  { href: '/my', label: '마이페이지', icon: '👤' },
+];
+
+export default function BottomNav() {
+  const pathname = usePathname();
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/95 backdrop-blur">
+      <div className="tab-bar flex">
+        {TABS.map((tab) => {
+          const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs ${
+                active ? 'text-soda-600 font-semibold' : 'text-gray-400'
+              }`}
+            >
+              <span className="text-lg leading-none">{tab.icon}</span>
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
