@@ -63,6 +63,16 @@ export default function SponsorDashboard() {
       });
   }, []);
 
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error ?? "캠페인 삭제에 실패했습니다.");
+      return;
+    }
+    setCampaigns((prev) => (prev ?? []).filter((c) => c.id !== id));
+  };
+
   const failedTotal = (campaigns ?? []).reduce((sum, c) => sum + c.failed_claims_count, 0);
   const active = (campaigns ?? []).filter((c) => c.status === "active");
   const draft = (campaigns ?? []).filter((c) => c.status === "draft");
@@ -111,7 +121,7 @@ export default function SponsorDashboard() {
       ) : (
         <div className="space-y-8">
           <CampaignSection title="진행중" campaigns={active} />
-          <CampaignSection title="임시저장" campaigns={draft} />
+          <CampaignSection title="임시저장" campaigns={draft} onDelete={handleDelete} />
           <CampaignSection title="종료" campaigns={ended} />
         </div>
       )}
@@ -119,7 +129,15 @@ export default function SponsorDashboard() {
   );
 }
 
-function CampaignSection({ title, campaigns }: { title: string; campaigns: CampaignSummary[] }) {
+function CampaignSection({
+  title,
+  campaigns,
+  onDelete,
+}: {
+  title: string;
+  campaigns: CampaignSummary[];
+  onDelete?: (id: string) => void | Promise<void>;
+}) {
   if (campaigns.length === 0) return null;
   return (
     <section>
@@ -128,14 +146,23 @@ function CampaignSection({ title, campaigns }: { title: string; campaigns: Campa
       </h2>
       <div className="space-y-3">
         {campaigns.map((c) => (
-          <CampaignRow key={c.id} campaign={c} />
+          <CampaignRow key={c.id} campaign={c} onDelete={onDelete} />
         ))}
       </div>
     </section>
   );
 }
 
-function CampaignRow({ campaign }: { campaign: CampaignSummary }) {
+function CampaignRow({
+  campaign,
+  onDelete,
+}: {
+  campaign: CampaignSummary;
+  onDelete?: (id: string) => void | Promise<void>;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   return (
     <Card className="flex items-center gap-4">
       {campaign.thumbnail_url ? (
@@ -167,13 +194,46 @@ function CampaignRow({ campaign }: { campaign: CampaignSummary }) {
         </div>
       </div>
 
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <a href={`/campaigns/${campaign.id}/rounds`} className="text-xs font-medium text-brand-600 hover:underline">
           판정 콘솔
         </a>
         <a href={`/campaigns/${campaign.id}/payouts`} className="text-xs font-medium text-brand-600 hover:underline">
           지급 현황
         </a>
+        {onDelete &&
+          (confirming ? (
+            <span className="flex items-center gap-1.5">
+              <span className="text-xs text-rose-500">삭제할까요?</span>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  await onDelete(campaign.id);
+                }}
+                className="text-xs font-medium text-rose-600 hover:underline disabled:opacity-50"
+              >
+                {deleting ? "삭제 중..." : "확인"}
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setConfirming(false)}
+                className="text-xs font-medium text-slate-400 hover:underline disabled:opacity-50"
+              >
+                취소
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              className="text-xs font-medium text-slate-400 hover:text-rose-600 hover:underline"
+            >
+              삭제
+            </button>
+          ))}
       </div>
     </Card>
   );
