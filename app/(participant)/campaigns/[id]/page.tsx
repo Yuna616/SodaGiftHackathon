@@ -376,31 +376,36 @@ function CampaignDetailContent() {
         {campaign.mission_url && (
           <div
             ref={missionSectionRef}
-            className={`mb-5 rounded-2xl border p-4 transition ${
-              missionHighlight ? 'border-rose-400 ring-2 ring-rose-200' : 'border-gray-200'
+            className={`mb-5 rounded-2xl border-[1.5px] p-4 transition ${
+              missionHighlight
+                ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-200'
+                : gateCleared
+                  ? 'border-emerald-200 bg-emerald-50'
+                  : 'border-accent bg-accent-light'
             }`}
           >
             {gateCleared ? (
               <>
-                <p className="text-sm font-semibold text-gray-900 mb-3">
+                <p className="text-sm font-semibold text-emerald-700 mb-3">
                   ✓ You've visited {campaign.sponsor_name}'s page
                 </p>
-                <button disabled className="w-full rounded-xl bg-gray-100 text-gray-400 font-semibold py-3 text-sm">
+                <button disabled className="w-full rounded-xl bg-white text-emerald-600 font-bold py-3.5 text-sm">
                   Page visit complete
                 </button>
               </>
             ) : (
               <>
-                <p className={`text-sm mb-3 ${missionHighlight ? 'text-rose-600 font-semibold' : 'text-gray-700'}`}>
+                <p className={`text-sm mb-3 font-medium ${missionHighlight ? 'text-rose-600 font-semibold' : 'text-accent-dark'}`}>
                   {missionHighlight
-                    ? 'You need to visit this page to participate'
-                    : `Visit the page ${campaign.sponsor_name} prepared to join the PICK`}
+                    ? '⚠️ You need to visit this page to participate'
+                    : `A quick visit to ${campaign.sponsor_name}'s page unlocks your PICK`}
                 </p>
                 <button
                   onClick={handleMissionVisitClick}
-                  className="w-full rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-accent py-3.5 text-sm font-extrabold text-[#052F3B] shadow-[0_6px_16px_rgba(23,193,232,.35)] active:scale-[0.99] transition"
                 >
                   Visit {campaign.sponsor_name}'s event page
+                  <span aria-hidden="true">↗</span>
                 </button>
               </>
             )}
