@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 // 캠페인 생성 마법사 2단계(라운드별 질문 설계, PRD 5.3)에서 사용.
 // architecture.md 4절 라우트 표엔 없지만 마법사 흐름상 반드시 필요해 추가함.
 //
-// PRD 12절(오픈 이슈, 확정): 예상 당첨자 수는 스폰서가 여기서 직접 입력한다.
-// 0 이하 입력은 저장 불가.
+// PRD 12절(오픈 이슈, 확정): 최대 당첨자 수는 스폰서가 여기서 직접 입력한다.
+// 0 이하 입력은 저장 불가. PRODUCT/CREDIT 둘 다 필수(0011 마이그레이션) — 정답자가
+// 이 수를 넘으면 판정 확정 시점에 무작위 선정으로 걸러진다.
 //
 // reward_mode 확장: PRODUCT(카탈로그 상품 지급, 기존)과 CREDIT(라운드에 건 고정
 // 풀 금액을 정답자 수로 나눠 갖는 배당형) 중 라운드마다 선택. 0003 마이그레이션의
@@ -26,6 +27,9 @@ const baseRoundSchema = {
   question_text: z.string().min(1),
   options: z.array(z.string().min(1)).min(2).max(8),
   resolution_criteria: z.string().optional(),
+  // 최대 당첨자 수 — PRODUCT/CREDIT 공통 필수. 정답자가 이 수를 넘으면 판정
+  // 확정 시점에 무작위로 당첨자를 뽑는다(0011 마이그레이션, rounds/[id]/resolve).
+  expected_winner_count: z.number().int().positive(),
   opens_at: z.string().datetime(),
   closes_at: z.string().datetime(),
 };
@@ -33,7 +37,6 @@ const baseRoundSchema = {
 const createRoundSchema = z.discriminatedUnion("reward_mode", [
   z.object({
     reward_mode: z.literal("PRODUCT"),
-    expected_winner_count: z.number().int().positive(),
     ...baseRoundSchema,
   }),
   z.object({

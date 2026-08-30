@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: round, error: roundError } = await supabase
     .from("rounds")
-    .select("id, campaign_id, status, reward_mode, credit_pool_amount, credit_currency")
+    .select("id, campaign_id, status, reward_mode, credit_pool_amount, credit_currency, expected_winner_count")
     .eq("id", params.id)
     .single();
   if (roundError || !round) {
@@ -120,7 +120,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .eq("id", p.id);
   }
 
-  // 4) 정답자만 reward_claims 생성 (FR-6: external_reference_id로 중복지급 방지)
+  // 3.5) 정답자가 최대 당첨자 수(expected_winner_count)를 넘으면 그 인원까지만
+  // 무작위로 뽑는다. is_correct는 정답을 맞혔다는 사실 그대로 true로 남고(위에서
+  // 이미 반영됨), 이 추첨은 "보상을 실제로 받을 인원"만 가른다 — 떨어진 정답자는
+  // reward_claims 자체가 안 생겨서 보상을 못 받는다.
+  const maxWinners = round.expected_winner_count;
+  let winners = correctPredictions;
+  let wasCapped = false;
+  if (maxWinners != null && correctPredictions.length > maxWinners) {
+    wasCapped = true;
+    const shuffled = [...correctPredictions];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    winners = shuffled.slice(0, maxWinners);
+  }
+
+  // 4) 당첨자만 reward_claims 생성 (FR-6: external_reference_id로 중복지급 방지)
   //
   //    PRODUCT 모드: 아직 어떤 카탈로그 상품을 받을지 안 정해졌으니 eligible로
   //    대기시키고, 참가자가 직접 고르는 /api/claims/[id]/confirm(또는 참가자
@@ -131,11 +148,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   //    하지 않고, 판정 즉시 fulfilled로 확정해서 마이페이지 "누적 획득
   //    리워드"에 바로 더해지게 한다(지갑에 돈이 쌓이는 형태). 참가자가
   //    고를 게 없다. soda_order_id는 실제 주문이 없으니 계속 null.
-  if (correctPredictions.length > 0) {
-    const payoutAmount =
-      round.reward_mode === "CREDIT" ? (round.credit_pool_amount ?? 0) / correctPredictions.length : null;
+  if (winners.length > 0) {
+    const payoutAmount = round.reward_mode === "CREDIT" ? (round.credit_pool_amount ?? 0) / winners.length : null;
 
-    const claims = correctPredictions.map((p) => ({
+    const claims = winners.map((p) => ({
       round_id: params.id,
       campaign_id: round.campaign_id,
       participant_id: p.participant_id,
@@ -157,7 +173,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // 라운드 재판정 자체가 DB 트리거로 막혀있어(check_round_resolvable) 여기가
     // 두 번 실행될 일이 없으니 중복 적립 걱정 없이 바로 넣는다.
     if (round.reward_mode === "CREDIT" && payoutAmount !== null) {
-      const walletRows = correctPredictions.map((p) => ({
+      const walletRows = winners.map((p) => ({
         participant_id: p.participant_id,
         amount: payoutAmount,
         currency: round.credit_currency,
@@ -170,11 +186,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  await createResultNotifications(params.id, parsed.data.correct_option_index);
+  await createResultNotifications(
+    params.id,
+    parsed.data.correct_option_index,
+    new Set(winners.map((p) => p.participant_id))
+  );
 
   return NextResponse.json({
     round_id: params.id,
     correct_option_index: parsed.data.correct_option_index,
-    winner_count: correctPredictions.length,
+    correct_participant_count: correctPredictions.length,
+    winner_count: winners.length,
+    was_capped: wasCapped, // true면 정답자 수가 최대 당첨자 수를 넘어서 무작위 선정이 있었다는 뜻
   });
 }
