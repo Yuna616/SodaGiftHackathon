@@ -324,7 +324,7 @@ function CampaignDetailContent() {
           )
         ) : null}
         <button
-          onClick={() => router.push('/')}
+          onClick={() => router.back()}
           className="absolute top-3 left-3 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center text-sm backdrop-blur"
         >
           ←
@@ -357,6 +357,7 @@ function CampaignDetailContent() {
               key={opt.id}
               label={opt.label}
               percent={campaign.consensus[opt.id] ?? 0}
+              count={campaign.counts[opt.id] ?? 0}
               selected={selected === opt.id}
               disabled={closed || stage === 'already' || stage === 'done' || stage === 'submitting'}
               onClick={() => {
