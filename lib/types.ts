@@ -199,6 +199,10 @@ export interface PublicCampaignWithConsensus extends PublicCampaign {
   consensus: Record<string, number>;
 }
 
+// 참가자 홈 피드 정렬 기준. "recommended"(추천순)가 기본값 — 인기(참여자 수)와 마감
+// 임박도를 함께 보는 "지금 뜨는" 캠페인 우선 노출, 순수 인기순/마감임박순과는 다른 기준.
+export type CampaignSort = "recommended" | "ending" | "popular";
+
 export interface ConsensusTrendPoint {
   at: string;
   total: number;

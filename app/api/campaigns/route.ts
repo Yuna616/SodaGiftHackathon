@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { listCampaigns } from "@/lib/repo";
+import type { CampaignSort } from "@/lib/types";
 
 // 캐싱된 상태로 응답하면 안 됨 — Next.js가 fetch()를 기본 캐싱해서 최신 DB 상태 대신
 // 오래된 응답을 돌려주는 문제가 실제로 있었음(예: 지급 현황 화면이 새 클레임을 안 보여줌).
@@ -29,7 +30,7 @@ const createCampaignSchema = z.object({
 // 스폰서용 POST만 있었는데, 유저앱에 필요해서 같은 라우트에 GET을 추가함.
 export async function GET(req: NextRequest) {
   const category = req.nextUrl.searchParams.get("category") ?? undefined;
-  const sort = (req.nextUrl.searchParams.get("sort") as "ending" | "popular") ?? "ending";
+  const sort = (req.nextUrl.searchParams.get("sort") as CampaignSort) ?? "recommended";
   const campaigns = await listCampaigns(category, sort);
   return NextResponse.json({ campaigns });
 }

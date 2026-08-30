@@ -4,6 +4,7 @@ const CATEGORIES = [
   { id: 'esports', label: 'e스포츠' },
   { id: 'variety', label: '예능' },
   { id: 'drama', label: '드라마' },
+  { id: 'beauty', label: '뷰티' },
 ];
 
 export default function CategoryTabs({

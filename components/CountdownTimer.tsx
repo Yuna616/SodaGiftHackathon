@@ -9,10 +9,14 @@ function formatRemaining(ms: number): string {
   const hours = Math.floor((totalSec % 86400) / 3600);
   const minutes = Math.floor((totalSec % 3600) / 60);
   const seconds = totalSec % 60;
-  if (days > 0) return `${days}일 ${hours}시간 남음`;
-  if (hours > 0) return `${hours}시간 ${minutes}분 남음`;
-  if (minutes > 0) return `${minutes}분 ${seconds}초 남음`;
-  return `${seconds}초 남음`;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}일`);
+  if (days > 0 || hours > 0) parts.push(`${hours}시간`);
+  if (days > 0 || hours > 0 || minutes > 0) parts.push(`${minutes}분`);
+  parts.push(`${seconds}초`); // 항상 초 단위까지 표기
+
+  return `${parts.join(' ')} 남음`;
 }
 
 export default function CountdownTimer({ endAt, className }: { endAt: string; className?: string }) {

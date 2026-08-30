@@ -21,6 +21,7 @@ import type {
   Invite,
   CampaignOption,
   AppNotification,
+  CampaignSort,
 } from "@/lib/types";
 
 function sb(): SupabaseClient {
@@ -56,7 +57,10 @@ function toPublicCampaign(campaign: CampaignRow, round: RoundRow, sponsorName: s
     prize_label: round.prize_label ?? (round.reward_mode === "CREDIT" ? "크레딧 배당" : "카탈로그 상품 중 선택"),
     prize_amount: round.reward_mode === "CREDIT" ? round.credit_pool_amount : null,
     prize_currency: round.reward_mode === "CREDIT" ? round.credit_currency : null,
-    winner_count: round.reward_mode === "PRODUCT" ? round.expected_winner_count : null,
+    // PRODUCT/CREDIT 둘 다 "예상 당첨 인원"을 스폰서가 입력해두면 그대로 보여준다.
+    // CREDIT은 실제 당첨자 수가 판정 시점 정답자 수로 정해지긴 하지만, 목록에서는
+    // 스폰서가 설계한 예상치를 "최대 N명"처럼 안내용으로 노출한다.
+    winner_count: round.expected_winner_count,
     thumbnail_url: campaign.thumbnail_url,
     media_url: campaign.media_url,
     media_type: campaign.media_type,
@@ -122,9 +126,17 @@ async function attachConsensus(pub: PublicCampaign): Promise<PublicCampaignWithC
 // 총 1 + 4N번의 요청을 순차(await 반복문)로 날려서 캠페인이 늘수록 홈 화면이 선형으로
 // 느려졌다 — round/sponsor/predictions를 캠페인 id들 기준으로 한 번씩만 배치 조회하도록
 // 고쳐서 캠페인 개수와 무관하게 쿼리 4번으로 끝나게 한다.
+// "추천순" 점수: 참여자 수를 남은 시간으로 나눠서 지금 활발하게 몰리고 있는
+// 캠페인(참여는 많은데 마감까지 얼마 안 남은 것)을 위로 끌어올린다. 순수 인기순/
+// 마감임박순과는 다른, 두 신호를 함께 보는 기본 정렬 기준.
+function recommendedScore(c: PublicCampaignWithConsensus): number {
+  const hoursLeft = Math.max((new Date(c.end_at).getTime() - Date.now()) / (1000 * 60 * 60), 1);
+  return c.total_predictions / hoursLeft;
+}
+
 export async function listCampaigns(
   category?: string,
-  sort: "ending" | "popular" = "ending"
+  sort: CampaignSort = "recommended"
 ): Promise<PublicCampaignWithConsensus[]> {
   const supabase = sb();
   let query = supabase.from("campaigns").select("*").neq("status", "draft");
@@ -166,10 +178,17 @@ export async function listCampaigns(
 
   if (sort === "popular") {
     results.sort((a, b) => b.total_predictions - a.total_predictions);
-  } else {
+  } else if (sort === "ending") {
     results.sort((a, b) => new Date(a.end_at).getTime() - new Date(b.end_at).getTime());
+  } else {
+    results.sort((a, b) => recommendedScore(b) - recommendedScore(a));
   }
-  return results;
+
+  // 마감된(활성이 아닌) 캠페인은 정렬 기준과 무관하게 항상 활성 캠페인보다 아래에
+  // 노출한다 — 위에서 정한 정렬 순서는 각 그룹 안에서만 유지(stable sort + filter).
+  const active = results.filter((c) => c.status === "active");
+  const inactive = results.filter((c) => c.status !== "active");
+  return [...active, ...inactive];
 }
 
 export async function getCampaign(id: string): Promise<PublicCampaign | null> {

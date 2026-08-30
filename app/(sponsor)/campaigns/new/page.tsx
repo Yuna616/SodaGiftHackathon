@@ -86,6 +86,7 @@ const CATEGORY_OPTIONS = [
   { id: "esports", label: "e스포츠" },
   { id: "variety", label: "예능" },
   { id: "drama", label: "드라마" },
+  { id: "beauty", label: "뷰티" },
 ];
 
 function groupByType(products: Product[]): Map<string, Product[]> {
