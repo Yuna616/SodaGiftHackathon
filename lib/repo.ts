@@ -171,59 +171,6 @@ export async function listCampaigns(
   return results;
 }
 
-// 참가자가 보는 "공개 스폰서 프로필" 화면용 — 이 스폰서의 draft가 아닌 캠페인만
-// listCampaigns와 같은 배치 조회 패턴으로 가져온다. 지갑 잔액/지급 실패 같은
-// 스폰서 콘솔 전용 통계는 여기서 다루지 않는다(공개 노출 대상이 아님).
-export async function listCampaignsBySponsor(
-  sponsorId: string,
-  sort: "ending" | "popular" = "ending"
-): Promise<PublicCampaignWithConsensus[]> {
-  const supabase = sb();
-  const { data: campaigns } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("sponsor_id", sponsorId)
-    .neq("status", "draft");
-  if (!campaigns || campaigns.length === 0) return [];
-
-  const campaignIds = campaigns.map((c) => c.id);
-  const [{ data: rounds }, { data: sponsor }] = await Promise.all([
-    supabase.from("rounds").select("*").in("campaign_id", campaignIds).eq("round_number", 1),
-    supabase.from("sponsors").select("name").eq("id", sponsorId).maybeSingle(),
-  ]);
-
-  const roundByCampaignId = new Map((rounds ?? []).map((r) => [r.campaign_id, r as RoundRow]));
-  const sponsorName = sponsor?.name ?? "";
-
-  const roundIds = (rounds ?? []).map((r) => r.id);
-  const { data: predictions } =
-    roundIds.length > 0
-      ? await supabase.from("predictions").select("round_id, selected_option_index").in("round_id", roundIds)
-      : { data: [] as { round_id: string; selected_option_index: number }[] };
-
-  const indexesByRoundId = new Map<string, number[]>();
-  for (const p of predictions ?? []) {
-    const list = indexesByRoundId.get(p.round_id) ?? [];
-    list.push(p.selected_option_index);
-    indexesByRoundId.set(p.round_id, list);
-  }
-
-  const results: PublicCampaignWithConsensus[] = [];
-  for (const campaign of campaigns) {
-    const round = roundByCampaignId.get(campaign.id);
-    if (!round) continue;
-    const pub = toPublicCampaign(campaign, round, sponsorName);
-    results.push({ ...pub, ...computeConsensus(pub.options, indexesByRoundId.get(round.id) ?? []) });
-  }
-
-  if (sort === "popular") {
-    results.sort((a, b) => b.total_predictions - a.total_predictions);
-  } else {
-    results.sort((a, b) => new Date(a.end_at).getTime() - new Date(b.end_at).getTime());
-  }
-  return results;
-}
-
 export async function getCampaign(id: string): Promise<PublicCampaign | null> {
   const bundle = await fetchCampaignAndRound(id);
   if (!bundle) return null;
