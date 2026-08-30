@@ -374,7 +374,7 @@ function CampaignDetailContent() {
             <p className="text-xs font-semibold text-gray-500 mb-1">당첨 시 받을 수 있는 보상</p>
             <p className="text-xs text-gray-600">
               정답자들이 {campaign.prize_amount?.toLocaleString()} {campaign.prize_currency}를 나눠 가져요.
-              당첨 후 원하는 브랜드 상품권으로 직접 받을 수 있어요.
+              당첨되면 따로 고를 것 없이 마이페이지 &quot;누적 획득 리워드&quot;에 바로 더해져요.
             </p>
           </div>
         )}
