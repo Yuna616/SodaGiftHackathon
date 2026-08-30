@@ -6,8 +6,8 @@
 // public일 땐 지갑 잔액/지급 실패처럼 콘솔 전용 정보를 아예 안 받으므로
 // (API 응답 자체에 없음) 화면에서도 자연히 안 보인다.
 
-import { useMemo, useState } from "react";
-import { Badge, Button } from "./ui";
+import { useMemo, useRef, useState } from "react";
+import { Badge, Button, Input } from "./ui";
 
 const CATEGORY_LABEL: Record<string, string> = {
   kpop: "K팝",
@@ -42,6 +42,8 @@ export type SponsorProfile = {
   name: string;
   contact_email?: string;
   status?: string;
+  avatar_url?: string;
+  banner_url?: string;
   created_at: string;
 };
 
@@ -91,6 +93,7 @@ export function SponsorProfileView({
   onCreateCampaign,
   onShare,
   shareLabel,
+  onProfileUpdate,
 }: {
   viewer: "owner" | "public";
   sponsor: SponsorProfile | null;
@@ -102,9 +105,11 @@ export function SponsorProfileView({
   onCreateCampaign?: () => void;
   onShare?: () => void;
   shareLabel?: string;
+  onProfileUpdate?: (sponsor: SponsorProfile) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortMode>("latest");
+  const [editingProfile, setEditingProfile] = useState(false);
   const isOwner = viewer === "owner";
 
   const visibleCampaigns = useMemo(() => {
@@ -125,12 +130,31 @@ export function SponsorProfileView({
     <main className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
       <aside>
         <div className="sticky top-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="h-20 bg-gradient-to-br from-brand-100 to-brand-50" />
+          <div className="h-20 overflow-hidden bg-gradient-to-br from-brand-100 to-brand-50">
+            {sponsor?.banner_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sponsor.banner_url} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
           <div className="-mt-10 px-5 pb-5">
-            {sponsor ? (
+            {isOwner && editingProfile && sponsor ? (
+              <ProfileEditPanel
+                sponsor={sponsor}
+                onCancel={() => setEditingProfile(false)}
+                onSaved={(updated) => {
+                  onProfileUpdate?.(updated);
+                  setEditingProfile(false);
+                }}
+              />
+            ) : sponsor ? (
               <>
-                <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full border-4 border-white bg-brand-600 text-xl font-bold text-white shadow-sm">
-                  {sponsor.name.trim()[0] ?? "?"}
+                <div className="mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-brand-600 text-xl font-bold text-white shadow-sm">
+                  {sponsor.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={sponsor.avatar_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    sponsor.name.trim()[0] ?? "?"
+                  )}
                 </div>
                 <div className="mb-1 flex min-w-0 items-center gap-1.5">
                   <h1 className="min-w-0 truncate text-base font-bold text-slate-900">{sponsor.name}</h1>
@@ -155,24 +179,28 @@ export function SponsorProfileView({
               </div>
             )}
 
-            <div className="mb-3 flex gap-2">
-              {isOwner && sponsor && (
-                <a href={`/sponsors/${sponsor.id}`} className="flex-1">
-                  <Button variant="secondary" className="w-full">
-                    참가자 화면으로 보기
+            {!(isOwner && editingProfile) && (
+              <>
+                {isOwner && sponsor && (
+                  <div className="mb-2">
+                    <Button variant="secondary" className="w-full" onClick={() => setEditingProfile(true)}>
+                      프로필 편집
+                    </Button>
+                  </div>
+                )}
+                {onShare && (
+                  <div className="mb-3">
+                    <Button variant="secondary" className="w-full" onClick={onShare}>
+                      {shareLabel ?? "공유"}
+                    </Button>
+                  </div>
+                )}
+                {isOwner && onCreateCampaign && (
+                  <Button className="w-full" onClick={onCreateCampaign}>
+                    + 새 캠페인 만들기
                   </Button>
-                </a>
-              )}
-              {onShare && (
-                <Button variant="secondary" className={isOwner ? undefined : "w-full"} onClick={onShare}>
-                  {shareLabel ?? "공유"}
-                </Button>
-              )}
-            </div>
-            {isOwner && onCreateCampaign && (
-              <Button className="w-full" onClick={onCreateCampaign}>
-                + 새 캠페인 만들기
-              </Button>
+                )}
+              </>
             )}
 
             <div className="my-5 border-t border-slate-100" />
@@ -314,6 +342,146 @@ export function SponsorProfileView({
         </div>
       </section>
     </main>
+  );
+}
+
+const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
+
+function ProfileEditPanel({
+  sponsor,
+  onCancel,
+  onSaved,
+}: {
+  sponsor: SponsorProfile;
+  onCancel: () => void;
+  onSaved: (sponsor: SponsorProfile) => void;
+}) {
+  const [name, setName] = useState(sponsor.name);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState(sponsor.avatar_url ?? "");
+  const [bannerPreview, setBannerPreview] = useState(sponsor.banner_url ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  const pickFile = (kind: "avatar" | "banner", file: File | null) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (kind === "avatar") {
+      setAvatarFile(file);
+      setAvatarPreview(url);
+    } else {
+      setBannerFile(file);
+      setBannerPreview(url);
+    }
+  };
+
+  const uploadImage = async (kind: "avatar" | "banner", file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("kind", kind);
+    const res = await fetch("/api/uploads/sponsor-image", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "이미지 업로드에 실패했습니다.");
+    return data.url as string;
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: Record<string, string> = {};
+      const trimmedName = name.trim();
+      if (trimmedName && trimmedName !== sponsor.name) payload.name = trimmedName;
+      if (avatarFile) payload.avatar_url = await uploadImage("avatar", avatarFile);
+      if (bannerFile) payload.banner_url = await uploadImage("banner", bannerFile);
+
+      if (Object.keys(payload).length === 0) {
+        onCancel();
+        return;
+      }
+
+      const res = await fetch(`/api/sponsors/${sponsor.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "프로필 저장에 실패했습니다.");
+      onSaved(data.sponsor);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "프로필 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="pt-2">
+      <button
+        type="button"
+        onClick={() => bannerInputRef.current?.click()}
+        className="group relative mb-3 block h-20 w-full overflow-hidden rounded-lg bg-gradient-to-br from-brand-100 to-brand-50"
+      >
+        {bannerPreview && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={bannerPreview} alt="" className="h-full w-full object-cover" />
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+          배너 변경
+        </span>
+      </button>
+      <input
+        ref={bannerInputRef}
+        type="file"
+        accept={IMAGE_ACCEPT}
+        className="hidden"
+        onChange={(e) => pickFile("banner", e.target.files?.[0] ?? null)}
+      />
+
+      <button
+        type="button"
+        onClick={() => avatarInputRef.current?.click()}
+        className="group relative mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-brand-600 text-xl font-bold text-white shadow-sm"
+      >
+        {avatarPreview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarPreview} alt="" className="h-full w-full object-cover" />
+        ) : (
+          name.trim()[0] || "?"
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/30 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+          변경
+        </span>
+      </button>
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept={IMAGE_ACCEPT}
+        className="hidden"
+        onChange={(e) => pickFile("avatar", e.target.files?.[0] ?? null)}
+      />
+
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="스폰서명"
+        className="mb-3"
+      />
+
+      {error && <p className="mb-2 text-xs text-rose-600">{error}</p>}
+
+      <div className="mb-4 flex gap-2">
+        <Button className="flex-1" onClick={handleSave} disabled={saving}>
+          {saving ? "저장 중..." : "저장"}
+        </Button>
+        <Button variant="secondary" onClick={onCancel} disabled={saving}>
+          취소
+        </Button>
+      </div>
+    </div>
   );
 }
 

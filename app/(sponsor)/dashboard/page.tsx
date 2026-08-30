@@ -72,6 +72,7 @@ export default function SponsorDashboard() {
       onCreateCampaign={() => (window.location.href = "/campaigns/new")}
       onShare={handleShare}
       shareLabel={copied ? "복사됨" : "공유"}
+      onProfileUpdate={(updated) => setSponsor(updated)}
     />
   );
 }

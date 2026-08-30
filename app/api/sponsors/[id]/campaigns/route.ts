@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const { data: sponsor, error: sponsorError } = await supabase
     .from("sponsors")
-    .select("id, name, contact_email, status, created_at")
+    .select("id, name, contact_email, status, avatar_url, banner_url, created_at")
     .eq("id", params.id)
     .maybeSingle();
   if (sponsorError) {
