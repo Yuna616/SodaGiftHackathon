@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# Next.js
+.next/
+out/
+build/
+
+# Supabase CLI
+supabase/.branches
+supabase/.temp
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
+.claude/
