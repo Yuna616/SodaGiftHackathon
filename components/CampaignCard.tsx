@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import CountdownTimer from './CountdownTimer';
-import type { CampaignWithConsensus } from '@/lib/types';
+import type { PublicCampaignWithConsensus } from '@/lib/types';
 
 const CATEGORY_LABEL: Record<string, string> = {
   kpop: 'K팝',
@@ -9,31 +9,34 @@ const CATEGORY_LABEL: Record<string, string> = {
   drama: '드라마',
 };
 
-const STATUS_LABEL: Record<CampaignWithConsensus['status'], { text: string; className: string }> = {
+const STATUS_LABEL: Record<PublicCampaignWithConsensus['status'], { text: string; className: string }> = {
   active: { text: '진행중', className: 'bg-soda-500 text-white' },
   ended: { text: '집계중', className: 'bg-amber-400 text-white' },
   resolved: { text: '발표완료', className: 'bg-black/60 text-white' },
 };
 
-function formatPrize(campaign: CampaignWithConsensus): string {
+function formatPrize(campaign: PublicCampaignWithConsensus): string {
   if (campaign.prize_type === 'amount' && campaign.prize_amount) {
-    return `💰 ${campaign.prize_amount.toLocaleString()}원 상당`;
+    return `💰 ${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? '원'} 상당`;
   }
   return `🎁 ${campaign.prize_label}`;
 }
 
-export default function CampaignCard({ campaign }: { campaign: CampaignWithConsensus }) {
+export default function CampaignCard({ campaign }: { campaign: PublicCampaignWithConsensus }) {
   const status = STATUS_LABEL[campaign.status];
   return (
     <Link
       href={`/campaigns/${campaign.id}`}
       className="block rounded-2xl border border-gray-100 bg-white shadow-sm active:scale-[0.99] transition overflow-hidden"
     >
-      <div className="relative aspect-[16/9] w-full">
-        <img src={campaign.thumbnail_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+      <div className="relative aspect-[16/9] w-full bg-gray-100">
+        {campaign.thumbnail_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={campaign.thumbnail_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+        )}
         <div className="absolute top-2 left-2 flex items-center gap-1.5">
           <span className="text-[11px] font-semibold text-white bg-black/55 backdrop-blur rounded-full px-2 py-0.5">
-            {CATEGORY_LABEL[campaign.category] ?? campaign.category}
+            {CATEGORY_LABEL[campaign.category] ?? (campaign.category || '캠페인')}
           </span>
           <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 ${status.className}`}>
             {status.text}
@@ -44,9 +47,11 @@ export default function CampaignCard({ campaign }: { campaign: CampaignWithConse
       <div className="p-4">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-semibold text-soda-600">{campaign.sponsor_name} 제공</span>
-          <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
-            총 {campaign.winner_count}명 당첨
-          </span>
+          {campaign.winner_count !== null && (
+            <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+              총 {campaign.winner_count}명 당첨
+            </span>
+          )}
         </div>
         <p className="text-xl font-extrabold text-gray-900 leading-tight mb-1.5">{formatPrize(campaign)}</p>
         <h3 className="text-sm text-gray-500 mb-3">{campaign.title}</h3>

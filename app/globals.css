@@ -2,20 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
 body {
-  background-color: #f4f5f6;
-  color: #0b0b0c;
-  font-family: var(--font-sodapick), sans-serif;
+  background-color: #f8fafc; /* slate-50, 스폰서 콘솔 기본 배경 */
+  color: #0f172a;
 }
 
+/* 참가자 앱 전용 셸 — app/(participant)/layout.tsx에서만 씀.
+   sponsor 콘솔 화면엔 이 클래스가 안 붙어서 영향 없음. */
 .app-shell {
   max-width: 430px;
   margin: 0 auto;
   min-height: 100dvh;
   background: #ffffff;
+  color: #0b0b0c;
   position: relative;
   padding-bottom: 84px;
+  font-family: var(--font-sodapick), sans-serif;
 }
 
 .tab-bar {

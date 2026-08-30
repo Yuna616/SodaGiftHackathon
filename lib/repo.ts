@@ -1,102 +1,158 @@
-import { getDb, newId } from './db';
-import type {
-  Campaign,
-  CampaignWithConsensus,
-  ConsensusTrendPoint,
-  Participant,
-  Prediction,
-  Invite,
-} from './types';
+// 참가자(유저) 앱 데이터 레이어. 원래 팀원이 SQLite(better-sqlite3 스타일)로 짠
+// lib/repo.ts를 Supabase로 이식한 것 — 함수 시그니처는 최대한 그대로 유지해서
+// 페이지/컴포넌트 쪽 코드는 거의 안 건드리게 했다(다만 전부 async로 바뀜).
+//
+// 서버 전용(API Route Handler에서만 import) — createServiceRoleClient를 쓴다.
+//
+// 참가자 화면은 캠페인당 라운드 1개(round_number=1)만 본다고 가정한다.
+// 스폰서 쪽 다중 라운드 캠페인은 이 화면에 아직 안 나온다 — 이후 과제.
 
-interface CampaignRow {
-  id: string;
-  title: string;
-  category: string;
-  options: string;
-  resolution_criteria: string;
-  start_at: string;
-  end_at: string;
-  status: string;
-  reward_option_ids: string;
-  sponsor_name: string;
-  sponsor_logo_url: string | null;
-  prize_type: string;
-  prize_label: string;
-  prize_amount: number | null;
-  winner_count: number;
-  thumbnail_url: string;
-  media_url: string;
-  media_type: string;
-  created_at: string;
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import type {
+  Campaign as CampaignRow,
+  Round as RoundRow,
+  Participant,
+  PublicCampaign,
+  PublicCampaignWithConsensus,
+  PublicPrediction,
+  ConsensusTrendPoint,
+  ClaimOrder,
+  Invite,
+  CampaignOption,
+} from "@/lib/types";
+
+function sb(): SupabaseClient {
+  return createServiceRoleClient();
 }
 
-function parseCampaign(row: CampaignRow): Campaign {
+function optionsOf(round: RoundRow): CampaignOption[] {
+  return round.options.map((label, i) => ({ id: String(i), label }));
+}
+
+function deriveStatus(round: RoundRow): "active" | "ended" | "resolved" {
+  if (round.status === "resolved") return "resolved";
+  if (round.status === "closed_pending_resolution") return "ended";
+  if (new Date(round.closes_at).getTime() < Date.now()) return "ended";
+  return "active";
+}
+
+function toPublicCampaign(campaign: CampaignRow, round: RoundRow, sponsorName: string): PublicCampaign {
   return {
-    ...row,
-    status: row.status as Campaign['status'],
-    media_type: row.media_type as Campaign['media_type'],
-    prize_type: row.prize_type as Campaign['prize_type'],
-    options: JSON.parse(row.options),
-    reward_option_ids: JSON.parse(row.reward_option_ids),
+    id: campaign.id,
+    round_id: round.id,
+    title: campaign.title,
+    category: campaign.category,
+    options: optionsOf(round),
+    resolution_criteria: round.resolution_criteria ?? "",
+    start_at: round.opens_at,
+    end_at: round.closes_at,
+    status: deriveStatus(round),
+    reward_option_ids: round.correct_option_index !== null ? [String(round.correct_option_index)] : [],
+    sponsor_name: sponsorName,
+    sponsor_logo_url: null,
+    prize_type: round.reward_mode === "CREDIT" ? "amount" : "item",
+    prize_label: round.prize_label ?? (round.reward_mode === "CREDIT" ? "크레딧 배당" : "카탈로그 상품 중 선택"),
+    prize_amount: round.reward_mode === "CREDIT" ? round.credit_pool_amount : null,
+    prize_currency: round.reward_mode === "CREDIT" ? round.credit_currency : null,
+    winner_count: round.reward_mode === "PRODUCT" ? round.expected_winner_count : null,
+    thumbnail_url: campaign.thumbnail_url,
+    media_url: campaign.media_url,
+    media_type: campaign.media_type,
+    created_at: campaign.created_at,
   };
 }
 
-function attachConsensus(campaign: Campaign): CampaignWithConsensus {
-  const db = getDb();
-  const rows = db
-    .prepare('SELECT selected_option, COUNT(*) as c FROM predictions WHERE campaign_id = ? GROUP BY selected_option')
-    .all(campaign.id) as unknown as { selected_option: string; c: number }[];
-  const total = rows.reduce((sum, r) => sum + r.c, 0);
+// campaigns + 그 캠페인의 1번 라운드 + 스폰서명을 한 번에 가져온다.
+async function fetchCampaignAndRound(
+  campaignId: string
+): Promise<{ campaign: CampaignRow; round: RoundRow; sponsorName: string } | null> {
+  const supabase = sb();
+  const { data: campaign } = await supabase.from("campaigns").select("*").eq("id", campaignId).single();
+  if (!campaign) return null;
+  const { data: round } = await supabase
+    .from("rounds")
+    .select("*")
+    .eq("campaign_id", campaignId)
+    .eq("round_number", 1)
+    .maybeSingle();
+  if (!round) return null;
+  const { data: sponsor } = await supabase
+    .from("sponsors")
+    .select("name")
+    .eq("id", campaign.sponsor_id)
+    .maybeSingle();
+  return { campaign, round, sponsorName: sponsor?.name ?? "" };
+}
+
+async function attachConsensus(pub: PublicCampaign): Promise<PublicCampaignWithConsensus> {
+  const supabase = sb();
+  const { data: predictions } = await supabase
+    .from("predictions")
+    .select("selected_option_index")
+    .eq("round_id", pub.round_id);
+
   const counts: Record<string, number> = {};
   const consensus: Record<string, number> = {};
-  for (const opt of campaign.options) {
-    const found = rows.find((r) => r.selected_option === opt.id);
-    counts[opt.id] = found?.c ?? 0;
-    consensus[opt.id] = total > 0 ? Math.round(((found?.c ?? 0) / total) * 1000) / 10 : 0;
+  for (const opt of pub.options) counts[opt.id] = 0;
+  for (const p of predictions ?? []) {
+    const key = String(p.selected_option_index);
+    if (key in counts) counts[key] += 1;
   }
-  return { ...campaign, total_predictions: total, counts, consensus };
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  for (const opt of pub.options) {
+    consensus[opt.id] = total > 0 ? Math.round((counts[opt.id] / total) * 1000) / 10 : 0;
+  }
+  return { ...pub, total_predictions: total, counts, consensus };
 }
 
-export function listCampaigns(
+export async function listCampaigns(
   category?: string,
-  sort: 'ending' | 'popular' = 'ending'
-): CampaignWithConsensus[] {
-  const db = getDb();
-  let rows: CampaignRow[];
-  if (category && category !== 'all') {
-    rows = db
-      .prepare('SELECT * FROM campaigns WHERE category = ? ORDER BY end_at ASC')
-      .all(category) as unknown as CampaignRow[];
+  sort: "ending" | "popular" = "ending"
+): Promise<PublicCampaignWithConsensus[]> {
+  const supabase = sb();
+  let query = supabase.from("campaigns").select("*").neq("status", "draft");
+  if (category && category !== "all") query = query.eq("category", category);
+  const { data: campaigns } = await query;
+
+  const results: PublicCampaignWithConsensus[] = [];
+  for (const campaign of campaigns ?? []) {
+    const bundle = await fetchCampaignAndRound(campaign.id);
+    if (!bundle) continue;
+    const pub = toPublicCampaign(bundle.campaign, bundle.round, bundle.sponsorName);
+    results.push(await attachConsensus(pub));
+  }
+
+  if (sort === "popular") {
+    results.sort((a, b) => b.total_predictions - a.total_predictions);
   } else {
-    rows = db.prepare('SELECT * FROM campaigns ORDER BY end_at ASC').all() as unknown as CampaignRow[];
+    results.sort((a, b) => new Date(a.end_at).getTime() - new Date(b.end_at).getTime());
   }
-  const campaigns = rows.map(parseCampaign).map(attachConsensus);
-  if (sort === 'popular') {
-    campaigns.sort((a, b) => b.total_predictions - a.total_predictions);
-  }
-  return campaigns;
+  return results;
 }
 
-export function getCampaign(id: string): Campaign | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(id) as unknown as CampaignRow | undefined;
-  return row ? parseCampaign(row) : null;
+export async function getCampaign(id: string): Promise<PublicCampaign | null> {
+  const bundle = await fetchCampaignAndRound(id);
+  if (!bundle) return null;
+  return toPublicCampaign(bundle.campaign, bundle.round, bundle.sponsorName);
 }
 
-export function getCampaignWithConsensus(id: string): CampaignWithConsensus | null {
-  const campaign = getCampaign(id);
+export async function getCampaignWithConsensus(id: string): Promise<PublicCampaignWithConsensus | null> {
+  const campaign = await getCampaign(id);
   if (!campaign) return null;
   return attachConsensus(campaign);
 }
 
-export function getConsensusTrend(id: string): ConsensusTrendPoint[] {
-  const campaign = getCampaign(id);
+export async function getConsensusTrend(id: string): Promise<ConsensusTrendPoint[]> {
+  const campaign = await getCampaign(id);
   if (!campaign) return [];
-  const db = getDb();
-  const predictions = db
-    .prepare('SELECT selected_option, submitted_at FROM predictions WHERE campaign_id = ? ORDER BY submitted_at ASC')
-    .all(id) as unknown as { selected_option: string; submitted_at: string }[];
-  if (predictions.length === 0) return [];
+  const supabase = sb();
+  const { data: predictions } = await supabase
+    .from("predictions")
+    .select("selected_option_index, submitted_at")
+    .eq("round_id", campaign.round_id)
+    .order("submitted_at", { ascending: true });
+  if (!predictions || predictions.length === 0) return [];
 
   const points: ConsensusTrendPoint[] = [];
   const runningCounts: Record<string, number> = {};
@@ -110,133 +166,234 @@ export function getConsensusTrend(id: string): ConsensusTrendPoint[] {
 
   let total = 0;
   for (const p of predictions) {
-    if (runningCounts[p.selected_option] === undefined) continue;
-    runningCounts[p.selected_option] += 1;
+    const key = String(p.selected_option_index);
+    if (!(key in runningCounts)) continue;
+    runningCounts[key] += 1;
     total += 1;
     const percents: Record<string, number> = {};
     for (const opt of campaign.options) {
       percents[opt.id] = Math.round((runningCounts[opt.id] / total) * 1000) / 10;
     }
-    // SQLite datetime('now')는 "YYYY-MM-DD HH:MM:SS" 형식의 UTC 문자열 -> ISO로 정규화
-    const at = p.submitted_at.includes('T') ? p.submitted_at : `${p.submitted_at.replace(' ', 'T')}.000Z`;
-    points.push({ at, total, percents });
+    points.push({ at: p.submitted_at, total, percents });
   }
   return points;
 }
 
-export function findParticipantByEmail(email: string): Participant | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM participants WHERE email = ?').get(email.toLowerCase().trim()) as
-    | Participant
-    | undefined;
-  return row ?? null;
+export async function findParticipantByEmail(email: string): Promise<Participant | null> {
+  const supabase = sb();
+  const { data } = await supabase
+    .from("participants")
+    .select("*")
+    .eq("email", email.toLowerCase().trim())
+    .maybeSingle();
+  return data ?? null;
 }
 
-export function getParticipant(id: string): Participant | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM participants WHERE id = ?').get(id) as unknown as Participant | undefined;
-  return row ?? null;
+export async function getParticipant(id: string): Promise<Participant | null> {
+  const supabase = sb();
+  const { data } = await supabase.from("participants").select("*").eq("id", id).maybeSingle();
+  return data ?? null;
 }
 
-export function upsertParticipant(email: string, country?: string): { participant: Participant; isNew: boolean } {
-  const db = getDb();
+export async function upsertParticipant(
+  email: string,
+  country?: string
+): Promise<{ participant: Participant; isNew: boolean }> {
   const normalized = email.toLowerCase().trim();
-  const existing = findParticipantByEmail(normalized);
+  const existing = await findParticipantByEmail(normalized);
   if (existing) return { participant: existing, isNew: false };
-  const id = newId('ptc');
-  db.prepare('INSERT INTO participants (id, email, country) VALUES (?, ?, ?)').run(
-    id,
-    normalized,
-    country ?? null
-  );
-  return { participant: getParticipant(id)!, isNew: true };
+  const supabase = sb();
+  const { data, error } = await supabase
+    .from("participants")
+    .insert({ email: normalized, country: country ?? null })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { participant: data, isNew: true };
 }
 
-export function findPrediction(participantId: string, campaignId: string): Prediction | null {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT * FROM predictions WHERE participant_id = ? AND campaign_id = ?')
-    .get(participantId, campaignId) as unknown as Prediction | undefined;
-  return row ?? null;
+function toPublicPrediction(row: {
+  id: string;
+  round_id: string;
+  campaign_id: string;
+  participant_id: string;
+  selected_option_index: number;
+  multiplier: number;
+  submitted_at: string;
+}): PublicPrediction {
+  return {
+    id: row.id,
+    participant_id: row.participant_id,
+    campaign_id: row.campaign_id,
+    round_id: row.round_id,
+    selected_option: String(row.selected_option_index),
+    multiplier: row.multiplier,
+    submitted_at: row.submitted_at,
+  };
 }
 
-export function getPrediction(id: string): Prediction | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM predictions WHERE id = ?').get(id) as unknown as Prediction | undefined;
-  return row ?? null;
+export async function findPrediction(participantId: string, campaignId: string): Promise<PublicPrediction | null> {
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) return null;
+  const supabase = sb();
+  const { data } = await supabase
+    .from("predictions")
+    .select("*")
+    .eq("round_id", campaign.round_id)
+    .eq("participant_id", participantId)
+    .maybeSingle();
+  if (!data) return null;
+  return toPublicPrediction({ ...data, campaign_id: campaignId });
 }
 
-export function createPrediction(participantId: string, campaignId: string, selectedOption: string): Prediction {
-  const db = getDb();
-  const id = newId('pred');
-  db.prepare(
-    'INSERT INTO predictions (id, participant_id, campaign_id, selected_option, multiplier) VALUES (?, ?, ?, ?, 1)'
-  ).run(id, participantId, campaignId, selectedOption);
-  return getPrediction(id)!;
+export async function getPrediction(id: string): Promise<PublicPrediction | null> {
+  const supabase = sb();
+  const { data } = await supabase.from("predictions").select("*").eq("id", id).maybeSingle();
+  if (!data) return null;
+  const { data: round } = await supabase.from("rounds").select("campaign_id").eq("id", data.round_id).single();
+  if (!round) return null;
+  return toPublicPrediction({ ...data, campaign_id: round.campaign_id });
 }
 
-export function bumpMultiplier(predictionId: string): void {
-  const db = getDb();
-  db.prepare('UPDATE predictions SET multiplier = multiplier + 1 WHERE id = ?').run(predictionId);
+export async function createPrediction(
+  participantId: string,
+  campaignId: string,
+  selectedOptionId: string
+): Promise<PublicPrediction> {
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) throw new Error("CAMPAIGN_NOT_FOUND");
+  const supabase = sb();
+  const { data, error } = await supabase
+    .from("predictions")
+    .insert({
+      round_id: campaign.round_id,
+      participant_id: participantId,
+      selected_option_index: Number(selectedOptionId),
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return toPublicPrediction({ ...data, campaign_id: campaignId });
 }
 
-export function listPredictionsForParticipant(participantId: string): (Prediction & { campaign: Campaign })[] {
-  const db = getDb();
-  const rows = db
-    .prepare('SELECT * FROM predictions WHERE participant_id = ? ORDER BY submitted_at DESC')
-    .all(participantId) as unknown as Prediction[];
-  return rows.map((r) => ({ ...r, campaign: getCampaign(r.campaign_id)! })).filter((r) => r.campaign);
+export async function bumpMultiplier(predictionId: string): Promise<void> {
+  const supabase = sb();
+  const { data } = await supabase.from("predictions").select("multiplier").eq("id", predictionId).single();
+  if (!data) return;
+  await supabase
+    .from("predictions")
+    .update({ multiplier: data.multiplier + 1 })
+    .eq("id", predictionId);
 }
 
-export function getClaimOrderByPrediction(predictionId: string) {
-  const db = getDb();
-  return db.prepare('SELECT * FROM claim_orders WHERE prediction_id = ?').get(predictionId) as unknown as     | import('./types').ClaimOrder
-    | undefined;
+export async function listPredictionsForParticipant(
+  participantId: string
+): Promise<(PublicPrediction & { campaign: PublicCampaign })[]> {
+  const supabase = sb();
+  const { data: predictions } = await supabase
+    .from("predictions")
+    .select("*, rounds!inner(campaign_id)")
+    .eq("participant_id", participantId)
+    .order("submitted_at", { ascending: false });
+
+  const results: (PublicPrediction & { campaign: PublicCampaign })[] = [];
+  for (const row of predictions ?? []) {
+    const campaignId = (row as unknown as { rounds: { campaign_id: string } }).rounds.campaign_id;
+    const campaign = await getCampaign(campaignId);
+    if (!campaign) continue;
+    results.push({ ...toPublicPrediction({ ...row, campaign_id: campaignId }), campaign });
+  }
+  return results;
 }
 
-export function getClaimOrder(id: string) {
-  const db = getDb();
-  return db.prepare('SELECT * FROM claim_orders WHERE id = ?').get(id) as unknown as     | import('./types').ClaimOrder
-    | undefined;
+function toClaimOrder(claim: {
+  id: string;
+  round_id: string;
+  participant_id: string;
+  selected_product_id: string | null;
+  external_reference_id: string;
+  soda_order_id: string | null;
+  status: string;
+  created_at: string;
+}): ClaimOrder | null {
+  // eligible/product_selected는 "아직 주문 안 됨" — teammate 원본 의미(claim_orders row
+  // 없음)와 맞추기 위해 null로 취급한다.
+  if (claim.status === "eligible" || claim.status === "product_selected") return null;
+  return {
+    id: claim.id,
+    prediction_id: "", // 호출부에서 채워 넣음(참가자 예측 id를 여기서 알 방법이 없음)
+    selected_product_id: claim.selected_product_id,
+    external_reference_id: claim.external_reference_id,
+    soda_order_id: claim.soda_order_id,
+    status: claim.status === "failed" ? "FAILED" : "ISSUED",
+    created_at: claim.created_at,
+  };
 }
 
-export function findInviteByToken(token: string): Invite | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM invites WHERE token = ?').get(token) as unknown as Invite | undefined;
-  return row ?? null;
+export async function getClaimOrderByPrediction(predictionId: string): Promise<ClaimOrder | null> {
+  const prediction = await getPrediction(predictionId);
+  if (!prediction) return null;
+  const supabase = sb();
+  const { data } = await supabase
+    .from("reward_claims")
+    .select("*")
+    .eq("round_id", prediction.round_id)
+    .eq("participant_id", prediction.participant_id)
+    .maybeSingle();
+  if (!data) return null;
+  const order = toClaimOrder(data);
+  return order ? { ...order, prediction_id: predictionId } : null;
 }
 
-export function getOrCreateInvite(inviterParticipantId: string, campaignId: string): Invite {
-  const db = getDb();
-  const existing = db
-    .prepare('SELECT * FROM invites WHERE inviter_participant_id = ? AND campaign_id = ? AND invitee_email IS NULL')
-    .get(inviterParticipantId, campaignId) as unknown as Invite | undefined;
+export async function getClaimOrder(id: string): Promise<ClaimOrder | null> {
+  const supabase = sb();
+  const { data } = await supabase.from("reward_claims").select("*").eq("id", id).maybeSingle();
+  if (!data) return null;
+  return toClaimOrder(data);
+}
+
+export async function findInviteByToken(token: string): Promise<Invite | null> {
+  const supabase = sb();
+  const { data } = await supabase.from("invites").select("*").eq("token", token).maybeSingle();
+  return data ?? null;
+}
+
+export async function getOrCreateInvite(inviterParticipantId: string, campaignId: string): Promise<Invite> {
+  const supabase = sb();
+  const { data: existing } = await supabase
+    .from("invites")
+    .select("*")
+    .eq("inviter_participant_id", inviterParticipantId)
+    .eq("campaign_id", campaignId)
+    .is("invitee_email", null)
+    .maybeSingle();
   if (existing) return existing;
-  const id = newId('inv');
-  const token = newId('tok');
-  db.prepare(
-    'INSERT INTO invites (id, token, inviter_participant_id, campaign_id, status) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, token, inviterParticipantId, campaignId, 'pending');
-  return findInviteByToken(token)!;
+
+  const token = crypto.randomUUID().replace(/-/g, "");
+  const { data, error } = await supabase
+    .from("invites")
+    .insert({ token, inviter_participant_id: inviterParticipantId, campaign_id: campaignId, status: "pending" })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-export function countCompletedInvites(inviterParticipantId: string, campaignId: string): number {
-  const db = getDb();
-  const row = db
-    .prepare(
-      "SELECT COUNT(*) as c FROM invites WHERE inviter_participant_id = ? AND campaign_id = ? AND status = 'completed'"
-    )
-    .get(inviterParticipantId, campaignId) as unknown as { c: number };
-  return row.c;
+export async function countCompletedInvites(inviterParticipantId: string, campaignId: string): Promise<number> {
+  const supabase = sb();
+  const { count } = await supabase
+    .from("invites")
+    .select("id", { count: "exact", head: true })
+    .eq("inviter_participant_id", inviterParticipantId)
+    .eq("campaign_id", campaignId)
+    .eq("status", "completed");
+  return count ?? 0;
 }
 
-export function completeInvite(token: string, inviteeEmail: string): Invite | null {
-  const db = getDb();
-  const invite = findInviteByToken(token);
-  if (!invite || invite.status === 'completed') return invite;
-  db.prepare("UPDATE invites SET status = 'completed', invitee_email = ? WHERE token = ?").run(
-    inviteeEmail,
-    token
-  );
+export async function completeInvite(token: string, inviteeEmail: string): Promise<Invite | null> {
+  const invite = await findInviteByToken(token);
+  if (!invite || invite.status === "completed") return invite;
+  const supabase = sb();
+  await supabase.from("invites").update({ status: "completed", invitee_email: inviteeEmail }).eq("token", token);
   return findInviteByToken(token);
 }

@@ -15,11 +15,17 @@ export default function ProductCard({
       type="button"
       onClick={onClick}
       disabled={soldOut}
-      className={`w-full text-left rounded-xl border p-3.5 flex items-center justify-between transition ${
+      className={`w-full text-left rounded-xl border p-3.5 flex items-center gap-3 transition ${
         selected ? 'border-soda-500 bg-soda-50' : 'border-gray-200 bg-white'
       } ${soldOut ? 'opacity-50' : 'active:scale-[0.99]'}`}
     >
-      <div>
+      {product.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={product.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-100" />
+      )}
+      <div className="flex-1">
         <p className="text-sm font-medium text-gray-800">{product.name}</p>
         <p className="text-xs text-gray-400 mt-0.5">{product.brand}</p>
       </div>

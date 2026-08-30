@@ -1,21 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { findParticipantByEmail, listPredictionsForParticipant, getClaimOrderByPrediction } from '@/lib/repo';
+import { NextRequest, NextResponse } from "next/server";
+import { findParticipantByEmail, listPredictionsForParticipant, getClaimOrderByPrediction } from "@/lib/repo";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { email } = body as { email?: string };
+  const body = await req.json().catch(() => null);
+  const { email } = (body ?? {}) as { email?: string };
   if (!email) {
-    return NextResponse.json({ error: 'MISSING_EMAIL' }, { status: 400 });
+    return NextResponse.json({ error: "MISSING_EMAIL" }, { status: 400 });
   }
-  const participant = findParticipantByEmail(email);
+  const participant = await findParticipantByEmail(email);
   if (!participant) {
-    return NextResponse.json({ error: 'PARTICIPANT_NOT_FOUND' }, { status: 404 });
+    return NextResponse.json({ error: "PARTICIPANT_NOT_FOUND" }, { status: 404 });
   }
-  const predictions = listPredictionsForParticipant(participant.id).map((p) => {
-    const isResolved = p.campaign.status === 'resolved';
-    const isWinner = isResolved && p.campaign.reward_option_ids.includes(p.selected_option);
-    const claimOrder = getClaimOrderByPrediction(p.id) ?? null;
-    return { ...p, isResolved, isWinner, claimOrder };
-  });
+  const raw = await listPredictionsForParticipant(participant.id);
+  const predictions = await Promise.all(
+    raw.map(async (p) => {
+      const isResolved = p.campaign.status === "resolved";
+      const isWinner = isResolved && p.campaign.reward_option_ids.includes(p.selected_option);
+      const claimOrder = (await getClaimOrderByPrediction(p.id)) ?? null;
+      return { ...p, isResolved, isWinner, claimOrder };
+    })
+  );
   return NextResponse.json({ participant, predictions });
 }

@@ -1,41 +1,33 @@
-import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { NextResponse } from "next/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 
-interface CampaignRow {
-  id: string;
-  reward_option_ids: string;
-}
+export const dynamic = "force-dynamic";
 
+// 예측왕 리더보드: 확정된(resolved) 라운드 기준 정답자 수 상위 5명.
+// reward_claims가 정답자에게만 생성된다는 점을 그대로 활용 — 별도 승패 계산 없이
+// reward_claims 행 수를 세면 된다.
 export async function GET() {
-  const db = getDb();
-  const resolvedCampaigns = db
-    .prepare("SELECT id, reward_option_ids FROM campaigns WHERE status = 'resolved'")
-    .all() as unknown as CampaignRow[];
+  const supabase = createServiceRoleClient();
+
+  const { data: claims } = await supabase.from("reward_claims").select("participant_id");
 
   const winCountByParticipant = new Map<string, number>();
-  const predictionStmt = db.prepare(
-    'SELECT participant_id, selected_option FROM predictions WHERE campaign_id = ?'
-  );
-  for (const campaign of resolvedCampaigns) {
-    const rewardIds: string[] = JSON.parse(campaign.reward_option_ids);
-    const predictions = predictionStmt.all(campaign.id) as unknown as { participant_id: string; selected_option: string }[];
-    for (const p of predictions) {
-      if (rewardIds.includes(p.selected_option)) {
-        winCountByParticipant.set(p.participant_id, (winCountByParticipant.get(p.participant_id) ?? 0) + 1);
-      }
-    }
+  for (const c of claims ?? []) {
+    winCountByParticipant.set(c.participant_id, (winCountByParticipant.get(c.participant_id) ?? 0) + 1);
   }
 
-  const participantStmt = db.prepare('SELECT email FROM participants WHERE id = ?');
-  const ranking = [...winCountByParticipant.entries()]
-    .map(([participantId, wins]) => {
-      const row = participantStmt.get(participantId) as unknown as { email: string } | undefined;
-      const email = row?.email ?? '알 수 없음';
-      const masked = email.replace(/^(.{2}).+(@.+)$/, '$1***$2');
+  const topIds = [...winCountByParticipant.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  const ranking = await Promise.all(
+    topIds.map(async ([participantId, wins]) => {
+      const { data } = await supabase.from("participants").select("email").eq("id", participantId).maybeSingle();
+      const email = data?.email ?? "알 수 없음";
+      const masked = email.replace(/^(.{2}).+(@.+)$/, "$1***$2");
       return { participantId, wins, email: masked };
     })
-    .sort((a, b) => b.wins - a.wins)
-    .slice(0, 5);
+  );
 
   return NextResponse.json({ ranking });
 }

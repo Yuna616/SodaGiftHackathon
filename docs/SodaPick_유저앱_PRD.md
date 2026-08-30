@@ -111,7 +111,7 @@
 | FR-3 | 동일 이메일은 동일 캠페인에 1회만 예측 가능하다 | 재제출 시도 시 기존 선택을 보여주고 재제출 차단 |
 | FR-4 | 친구 초대는 가입 완료 시점에만 배수를 지급한다 | 링크 클릭만으로는 배수 미지급, 신규 이메일 가입 완료 시점에 지급 |
 | FR-5 | 클레임 시 실시간 재고를 재확인한다 | `GET /v1/products/{id}/availability` 호출 결과가 `ON_SALE`이 아니면 대체 옵션 제시 |
-| FR-6 | 리워드 발급은 중복 지급되지 않는다 | `external_reference_id`를 캠페인ID+참가자ID 조합으로 생성해 `POST /v1/orders` 호출 |
+| FR-6 | 리워드 발급은 중복 지급되지 않는다 | `external_reference_id`를 캠페인ID+라운드ID+참가자ID 조합(해시로 축약)으로 생성해 `POST /v1/orders` 호출 — 아래 8장 참고 |
 | FR-7 | 클레임 완료 화면은 항상 발신 유도 CTA를 포함한다 | 예외 없이 모든 클레임 완료 시 CTA 노출 |
 | FR-8 | 캠페인 카드는 스폰서·옵션별 제출자 수·선택 비중·상품(아이템 또는 금액)·총 당첨 인원·썸네일 이미지를 필수로 포함한다 | 하나라도 없으면 카드를 노출하지 않음, 스폰서/상품은 카드 내 시각적으로 가장 크게 표시 |
 | FR-9 | 캠페인 상세는 스폰서·상품·설명 미디어(이미지 또는 동영상)를 필수로 포함한다 | 셋 중 하나라도 없으면 상세 화면 진입 불가, 미디어는 상세 화면 최상단에 노출 |
@@ -141,16 +141,17 @@ GET /v1/products?country_code={참가자국가}&page=0&size=10
 POST https://biz-sandbox-api.sodagift.com/v1/orders
 Header: SODA-API-KEY
 {
-  "item": { "id": <선택한 product id> },
+  "item": { "id": <선택한 product id>, "custom_amount": <가변금액 상품권일 때만> },
   "delivery": {
     "method": "EMAIL",
     "recipient": { "name": "<참가자 이름>", "email": "<참가자 이메일>" },
     "sender": { "name": "SodaPick" }
   },
   "message": "축하합니다! 예측에 성공하셨어요 🎉",
-  "external_reference_id": "sodapick_{campaign_id}_{participant_id}"
+  "external_reference_id": "sodapick{campaign_id}{round_id}{participant_id}"
 }
 ```
+> 실호출로 확인함(2026-08-29, 고객사앱 쪽에서 검증): `external_reference_id`는 영숫자만 허용(하이픈·언더스코어 들어가면 400), `round_id`까지 넣어야 같은 캠페인 다른 라운드 당첨 시 값이 안 겹침. 가변금액 상품권(고정 `amount`가 없고 `min_amount`~`max_amount` 범위인 상품)은 `item.custom_amount`(스네이크케이스)를 꼭 같이 보내야 함 — camelCase나 top-level 필드로는 인식 안 됨. `lib/soda/client.ts`의 `createOrder`/`buildExternalReferenceId` 그대로 재사용 가능.
 
 **클레임 페이지 상태 확인**
 ```

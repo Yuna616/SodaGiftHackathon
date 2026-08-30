@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getDb, newId } from '@/lib/db';
-import { getPrediction, getCampaign, getParticipant, getClaimOrderByPrediction } from '@/lib/repo';
-import { checkAvailability, submitOrder } from '@/lib/sodagift-mock';
-import { recordEvent } from '@/lib/analytics';
-import type { ClaimOrder } from '@/lib/types';
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { confirmClaim } from "@/lib/claims";
+import { getPrediction, getCampaign } from "@/lib/repo";
+import { recordEvent } from "@/lib/analytics";
 
+export const dynamic = "force-dynamic";
+
+// 참가자 앱: 클레임 배송 정보 확정. predictionId 기준으로 reward_claims를 찾아
+// lib/claims.ts의 공용 확정 로직을 태운다 (스폰서 쪽 /api/claims/[id]/confirm과 동일 로직).
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { predictionId, productId, recipientName, recipientEmail, message } = body as {
+  const body = await req.json().catch(() => null);
+  const { predictionId, productId, recipientName, recipientEmail, message } = (body ?? {}) as {
     predictionId?: string;
     productId?: string;
     recipientName?: string;
@@ -16,53 +19,43 @@ export async function POST(req: NextRequest) {
   };
 
   if (!predictionId || !productId || !recipientName || !recipientEmail) {
-    return NextResponse.json({ error: 'MISSING_FIELDS' }, { status: 400 });
+    return NextResponse.json({ error: "MISSING_FIELDS" }, { status: 400 });
   }
 
-  const prediction = getPrediction(predictionId);
+  const prediction = await getPrediction(predictionId);
   if (!prediction) {
-    return NextResponse.json({ error: 'PREDICTION_NOT_FOUND' }, { status: 404 });
+    return NextResponse.json({ error: "PREDICTION_NOT_FOUND" }, { status: 404 });
   }
-  const campaign = getCampaign(prediction.campaign_id);
-  const participant = getParticipant(prediction.participant_id);
-  if (!campaign || !participant) {
-    return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+  const campaign = await getCampaign(prediction.campaign_id);
+  if (!campaign) {
+    return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }
-  const isWinner = campaign.status === 'resolved' && campaign.reward_option_ids.includes(prediction.selected_option);
+  const isWinner = campaign.status === "resolved" && campaign.reward_option_ids.includes(prediction.selected_option);
   if (!isWinner) {
-    return NextResponse.json({ error: 'NOT_A_WINNER' }, { status: 403 });
+    return NextResponse.json({ error: "NOT_A_WINNER" }, { status: 403 });
   }
 
-  // FR-6: 멱등성 보장, 재호출 시 기존 주문 반환
-  const existing = getClaimOrderByPrediction(predictionId);
-  if (existing) {
-    return NextResponse.json({ order: existing, alreadyClaimed: true });
+  const supabase = createServiceRoleClient();
+  const { data: claim } = await supabase
+    .from("reward_claims")
+    .select("*")
+    .eq("round_id", prediction.round_id)
+    .eq("participant_id", prediction.participant_id)
+    .maybeSingle();
+  if (!claim) {
+    return NextResponse.json({ error: "NOT_A_WINNER" }, { status: 403 });
   }
 
-  const availability = checkAvailability(productId);
-  if (availability !== 'ON_SALE') {
-    return NextResponse.json({ error: 'PRODUCT_DISCONTINUED' }, { status: 409 });
+  // FR-6: 멱등성 보장 — 이미 주문이 나간 상태면(리트라이가 아니라 재요청) 기존 걸 그대로 반환
+  if (claim.status !== "eligible") {
+    return NextResponse.json({ order: { id: claim.id, ...claim }, alreadyClaimed: true });
   }
 
-  const externalReferenceId = `sodapick_${campaign.id}_${participant.id}`;
-  const result = submitOrder({
-    productId,
-    recipientName,
-    recipientEmail,
-    senderName: 'SodaPick',
-    message: message || '축하합니다! 예측에 성공하셨어요 🎉',
-    externalReferenceId,
-  });
+  const result = await confirmClaim(supabase, claim.id, productId, { recipientName, recipientEmail, message });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
 
-  const db = getDb();
-  const id = newId('claim');
-  db.prepare(
-    `INSERT INTO claim_orders (id, prediction_id, selected_product_id, external_reference_id, soda_order_id, status)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(id, predictionId, productId, externalReferenceId, result.sodaOrderId, result.status);
-
-  const order = db.prepare('SELECT * FROM claim_orders WHERE id = ?').get(id) as unknown as ClaimOrder;
-  recordEvent('claim_completed', { participantId: participant.id, campaignId: campaign.id });
-
-  return NextResponse.json({ order, alreadyClaimed: false });
+  await recordEvent("claim_completed", { participantId: prediction.participant_id, campaignId: campaign.id });
+  return NextResponse.json({ order: { id: claim.id, ...result.claim }, alreadyClaimed: false });
 }
