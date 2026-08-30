@@ -196,7 +196,7 @@ export default function MyPage() {
 
       <div className="mb-[26px] flex gap-2.5">
         {[
-          { v: String(entryHistory.length + livePicks.length), k: 'Entries' },
+          { v: String(entryHistory.length), k: 'Results' },
           { v: String(winCount), k: 'Wins' },
           { v: `${hitRate}%`, k: 'Hit rate' },
         ].map((s) => (
@@ -236,9 +236,17 @@ export default function MyPage() {
         </div>
       )}
 
-      <h2 className="mb-3 text-[17px] font-extrabold tracking-[-0.3px] text-ink">Entry history</h2>
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-[17px] font-extrabold tracking-[-0.3px] text-ink">Results</h2>
+        {entryHistory.length > 0 && (
+          <span className="text-[12.5px] font-semibold text-[#9AA0A8]">
+            {winCount} won · {entryHistory.length - winCount} lost
+          </span>
+        )}
+      </div>
+      <p className="-mt-1.5 mb-3 text-[11.5px] text-[#9AA0A8]">Campaigns that have closed and announced a winner</p>
       {entryHistory.length === 0 ? (
-        <p className="mb-[26px] text-xs text-gray-400">No resolved entries yet</p>
+        <p className="mb-[26px] text-xs text-gray-400">No results yet — check back once a campaign closes</p>
       ) : (
         <div className="mb-[26px] rounded-[22px] bg-white p-1.5 shadow-[0_2px_10px_rgba(20,22,26,.04)]">
           {entryHistory.map((p) => {
