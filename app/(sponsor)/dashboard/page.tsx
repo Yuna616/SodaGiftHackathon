@@ -1,13 +1,20 @@
 "use client";
 
-// PRD 5.1 대시보드 홈: 진행중/임시저장/종료 캠페인 리스트, 지갑 잔액 요약 카드,
-// 지급 실패 알림 뱃지. 여기서 새 캠페인을 만들고, 자신이 만든 캠페인들을 확인한다.
+// PRD 5.1 대시보드 홈: 고객사 프로필 + 지갑 잔액 + 진행중 이벤트를 한눈에 보여주는
+// 메인 화면. 여기서 새 캠페인을 만들고, 자신이 만든 캠페인들을 관리한다.
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Callout, Card } from "../_components/ui";
 
 // TODO: 인증 붙기 전까지 seed된 데모 스폰서 id 하드코딩 (마법사와 동일한 값)
 const DEMO_SPONSOR_ID = "72495905-2368-41a3-8eba-fef7a07fcc21";
+
+const CATEGORY_LABEL: Record<string, string> = {
+  kpop: "K팝",
+  esports: "e스포츠",
+  variety: "예능",
+  drama: "드라마",
+};
 
 type RoundSummary = {
   id: string;
@@ -23,8 +30,27 @@ type CampaignSummary = {
   category: string;
   thumbnail_url: string;
   created_at: string;
+  starts_at: string | null;
+  ends_at: string | null;
   rounds: RoundSummary[];
   failed_claims_count: number;
+};
+
+type Sponsor = {
+  id: string;
+  name: string;
+  contact_email: string;
+  status: string;
+  created_at: string;
+};
+
+type Stats = {
+  total_campaigns: number;
+  active_campaigns: number;
+  draft_campaigns: number;
+  ended_campaigns: number;
+  total_participants: number;
+  total_failed_claims: number;
 };
 
 const CAMPAIGN_STATUS_LABEL: Record<string, string> = {
@@ -44,7 +70,14 @@ const ROUND_STATUS_LABEL: Record<string, string> = {
   resolved: "판정 완료",
 };
 
+function formatDate(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+}
+
 export default function SponsorDashboard() {
+  const [sponsor, setSponsor] = useState<Sponsor | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignSummary[] | null>(null);
   const [balance, setBalance] = useState<{ amount: number; currency: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +87,8 @@ export default function SponsorDashboard() {
       .then((r) => r.json())
       .then((data) => {
         if (data.error) return setError(data.error);
+        setSponsor(data.sponsor);
+        setStats(data.stats);
         setCampaigns(data.campaigns ?? []);
       });
     fetch("/api/wallet/balance")
@@ -73,40 +108,37 @@ export default function SponsorDashboard() {
     setCampaigns((prev) => (prev ?? []).filter((c) => c.id !== id));
   };
 
-  const failedTotal = (campaigns ?? []).reduce((sum, c) => sum + c.failed_claims_count, 0);
   const active = (campaigns ?? []).filter((c) => c.status === "active");
   const draft = (campaigns ?? []).filter((c) => c.status === "draft");
   const ended = (campaigns ?? []).filter((c) => c.status === "ended");
 
   return (
     <main>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="mb-1 text-2xl font-bold text-slate-900">대시보드</h1>
-          <p className="text-sm text-slate-500">내가 만든 캠페인을 관리해요.</p>
-        </div>
-        <Button onClick={() => (window.location.href = "/campaigns/new")}>+ 새 캠페인 만들기</Button>
-      </div>
-
       {error && (
         <div className="mb-4">
           <Callout tone="red">{error}</Callout>
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-4">
-        <Card>
-          <p className="text-xs text-slate-500">지갑 잔액</p>
-          <p className="mt-1 text-xl font-bold text-slate-900">
-            {balance ? `${balance.amount.toLocaleString()} ${balance.currency}` : "-"}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs text-slate-500">지급 실패</p>
-          <p className={`mt-1 text-xl font-bold ${failedTotal > 0 ? "text-rose-600" : "text-slate-900"}`}>
-            {failedTotal}건
-          </p>
-        </Card>
+      <ProfileHeader sponsor={sponsor} />
+
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard
+          label="지갑 잔액"
+          value={balance ? `${balance.amount.toLocaleString()} ${balance.currency}` : "-"}
+        />
+        <StatCard label="진행중 이벤트" value={stats ? `${stats.active_campaigns}개` : "-"} />
+        <StatCard label="누적 참여자" value={stats ? `${stats.total_participants.toLocaleString()}명` : "-"} />
+        <StatCard
+          label="지급 실패"
+          value={stats ? `${stats.total_failed_claims}건` : "-"}
+          tone={stats && stats.total_failed_claims > 0 ? "danger" : "default"}
+        />
+      </div>
+
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-900">내 이벤트</h2>
+        <Button onClick={() => (window.location.href = "/campaigns/new")}>+ 새 캠페인 만들기</Button>
       </div>
 
       {campaigns === null ? (
@@ -120,12 +152,122 @@ export default function SponsorDashboard() {
         </Card>
       ) : (
         <div className="space-y-8">
-          <CampaignSection title="진행중" campaigns={active} />
+          {active.length > 0 && (
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">
+                진행중 <span className="text-slate-400">({active.length})</span>
+              </h3>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {active.map((c) => (
+                  <ActiveCampaignCard key={c.id} campaign={c} />
+                ))}
+              </div>
+            </section>
+          )}
+
           <CampaignSection title="임시저장" campaigns={draft} onDelete={handleDelete} />
           <CampaignSection title="종료" campaigns={ended} />
         </div>
       )}
     </main>
+  );
+}
+
+function ProfileHeader({ sponsor }: { sponsor: Sponsor | null }) {
+  const initial = sponsor?.name?.trim()?.[0] ?? "?";
+  return (
+    <Card className="mb-6 flex items-center gap-4">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-white">
+        {initial}
+      </div>
+      <div className="min-w-0 flex-1">
+        {sponsor ? (
+          <>
+            <div className="mb-0.5 flex items-center gap-2">
+              <h1 className="truncate text-lg font-bold text-slate-900">{sponsor.name}</h1>
+              <Badge tone={sponsor.status === "active" ? "green" : "slate"}>
+                {sponsor.status === "active" ? "활성" : sponsor.status}
+              </Badge>
+            </div>
+            <p className="truncate text-sm text-slate-500">{sponsor.contact_email}</p>
+            <p className="mt-0.5 text-xs text-slate-400">{formatDate(sponsor.created_at)}부터 함께하고 있어요</p>
+          </>
+        ) : (
+          <>
+            <div className="mb-2 h-5 w-32 animate-pulse rounded bg-slate-100" />
+            <div className="h-4 w-48 animate-pulse rounded bg-slate-100" />
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "danger";
+}) {
+  return (
+    <Card>
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className={`mt-1 text-xl font-bold ${tone === "danger" ? "text-rose-600" : "text-slate-900"}`}>{value}</p>
+    </Card>
+  );
+}
+
+function ActiveCampaignCard({ campaign }: { campaign: CampaignSummary }) {
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        {campaign.thumbnail_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={campaign.thumbnail_url} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+        ) : (
+          <div className="h-14 w-14 shrink-0 rounded-lg bg-slate-100" />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-1.5">
+            <h4 className="truncate text-sm font-semibold text-slate-900">{campaign.title}</h4>
+            {campaign.category && <Badge tone="purple">{CATEGORY_LABEL[campaign.category] ?? campaign.category}</Badge>}
+            {campaign.failed_claims_count > 0 && (
+              <Badge tone="red">지급 실패 {campaign.failed_claims_count}건</Badge>
+            )}
+          </div>
+          {(campaign.starts_at || campaign.ends_at) && (
+            <p className="text-xs text-slate-400">
+              {formatDate(campaign.starts_at)} ~ {formatDate(campaign.ends_at)}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 text-xs text-slate-500">
+        {campaign.rounds.length === 0 ? (
+          <span>라운드 없음</span>
+        ) : (
+          campaign.rounds.map((r) => (
+            <span key={r.id} className="rounded-full bg-slate-100 px-2 py-0.5">
+              라운드 {r.round_number} · {r.reward_mode === "CREDIT" ? "크레딧" : "상품"} ·{" "}
+              {ROUND_STATUS_LABEL[r.status] ?? r.status}
+            </span>
+          ))
+        )}
+      </div>
+
+      <div className="flex gap-3 border-t border-slate-100 pt-3">
+        <a href={`/campaigns/${campaign.id}/rounds`} className="text-xs font-medium text-brand-600 hover:underline">
+          판정 콘솔
+        </a>
+        <a href={`/campaigns/${campaign.id}/payouts`} className="text-xs font-medium text-brand-600 hover:underline">
+          지급 현황
+        </a>
+      </div>
+    </Card>
   );
 }
 
@@ -141,9 +283,9 @@ function CampaignSection({
   if (campaigns.length === 0) return null;
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">
+      <h3 className="mb-3 text-sm font-semibold text-slate-700">
         {title} <span className="text-slate-400">({campaigns.length})</span>
-      </h2>
+      </h3>
       <div className="space-y-3">
         {campaigns.map((c) => (
           <CampaignRow key={c.id} campaign={c} onDelete={onDelete} />
@@ -174,7 +316,7 @@ function CampaignRow({
 
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex items-center gap-2">
-          <h3 className="truncate text-sm font-semibold text-slate-900">{campaign.title}</h3>
+          <h4 className="truncate text-sm font-semibold text-slate-900">{campaign.title}</h4>
           <Badge tone={CAMPAIGN_STATUS_TONE[campaign.status]}>{CAMPAIGN_STATUS_LABEL[campaign.status]}</Badge>
           {campaign.failed_claims_count > 0 && (
             <Badge tone="red">지급 실패 {campaign.failed_claims_count}건</Badge>
