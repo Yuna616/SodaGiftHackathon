@@ -1,8 +1,17 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 export default function SponsorLayout({ children }: { children: React.ReactNode }) {
+  // 대시보드는 프로필 사이드바 + 목록 2단 레이아웃이라 다른 화면(마법사/판정
+  // 콘솔/지급 현황)보다 더 넓은 폭이 필요하다.
+  const isDashboard = usePathname() === "/dashboard";
+  const widthClass = isDashboard ? "max-w-6xl" : "max-w-4xl";
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center gap-2 px-6 py-4">
+        <div className={`mx-auto flex ${widthClass} items-center gap-2 px-6 py-4`}>
           <a href="/dashboard" className="text-lg font-bold text-brand-600">
             SodaPick
           </a>
@@ -18,7 +27,7 @@ export default function SponsorLayout({ children }: { children: React.ReactNode 
           </a>
         </div>
       </header>
-      <div className="mx-auto max-w-4xl px-6 py-8">{children}</div>
+      <div className={`mx-auto ${widthClass} px-6 py-8`}>{children}</div>
     </div>
   );
 }
