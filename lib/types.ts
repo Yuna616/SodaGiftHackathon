@@ -28,6 +28,11 @@ export type RewardClaimStatus = (typeof REWARD_CLAIM_STATUS)[number];
 export const DISPUTE_TICKET_STATUS = ["open", "reviewing", "closed"] as const;
 export type DisputeTicketStatus = (typeof DISPUTE_TICKET_STATUS)[number];
 
+// 0002 마이그레이션: 라운드별 보상 방식. PRODUCT = 카탈로그 상품 지급(기존),
+// CREDIT = 라운드에 건 고정 풀 금액을 정답자 수로 나눠 갖는 배당형.
+export const REWARD_MODE = ["PRODUCT", "CREDIT"] as const;
+export type RewardMode = (typeof REWARD_MODE)[number];
+
 export interface Sponsor {
   id: string;
   name: string;
@@ -46,6 +51,7 @@ export interface Campaign {
   starts_at: string | null;
   ends_at: string | null;
   status: CampaignStatus;
+  mission_url: string | null; // 참여 전 방문해야 하는 사이트, null이면 미션 없음
   created_at: string;
 }
 
@@ -63,7 +69,10 @@ export interface Round {
   question_text: string;
   options: string[]; // 4지선다
   resolution_criteria: string | null;
-  expected_winner_count: number; // FR-2: 예산 게이트 계산용, 스폰서 직접 입력 (자동 계산 아님)
+  reward_mode: RewardMode;
+  expected_winner_count: number | null; // PRODUCT 모드에서만 필수, 스폰서 직접 입력 (자동 계산 아님)
+  credit_pool_amount: number | null; // CREDIT 모드에서만 필수
+  credit_currency: string | null; // CREDIT 모드: 이 통화 안에서 당첨자가 브랜드를 직접 고른다
   correct_option_index: number | null; // null until resolved
   opens_at: string;
   closes_at: string;
@@ -99,8 +108,17 @@ export interface RewardClaim {
   external_reference_id: string; // FR-6: 중복지급 방지
   soda_order_id: string | null;
   soda_order_item_id: string | null;
+  payout_amount: number | null; // CREDIT 모드: 정답자 수로 나눈 실수령액
+  payout_currency: string | null; // CREDIT 모드에서만 채워짐
   created_at: string;
   updated_at: string;
+}
+
+export interface MissionCompletion {
+  id: string;
+  campaign_id: string;
+  participant_id: string;
+  completed_at: string;
 }
 
 export interface ResolutionAuditLog {
