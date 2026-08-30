@@ -274,6 +274,23 @@ export interface GiftOrder {
   created_at: string;
 }
 
+// 0007 마이그레이션: 활동알림(진행 현황 순위 변동 / 마감 임박 / 결과 발표)
+export const NOTIFICATION_TYPES = ["rank_change", "deadline_soon", "result"] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface AppNotification {
+  id: string;
+  participant_id: string;
+  campaign_id: string;
+  campaign_title: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  is_win: boolean | null;
+  read_at: string | null;
+  created_at: string;
+}
+
 export const ANALYTICS_EVENTS = [
   "campaign_viewed",
   "prediction_submitted",

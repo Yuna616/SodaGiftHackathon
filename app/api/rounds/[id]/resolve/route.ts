@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { buildExternalReferenceId } from "@/lib/soda/client";
+import { createResultNotifications } from "@/lib/repo";
 
 // 캐싱된 상태로 응답하면 안 됨 — Next.js가 fetch()를 기본 캐싱해서 최신 DB 상태 대신
 // 오래된 응답을 돌려주는 문제가 실제로 있었음(예: 지급 현황 화면이 새 클레임을 안 보여줌).
@@ -145,6 +146,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: claimsError.message }, { status: 500 });
     }
   }
+
+  await createResultNotifications(params.id, parsed.data.correct_option_index);
 
   return NextResponse.json({
     round_id: params.id,

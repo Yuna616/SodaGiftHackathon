@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import CategoryTabs from '@/components/CategoryTabs';
 import CampaignCard from '@/components/CampaignCard';
+import NotificationBell from '@/components/NotificationBell';
 import type { PublicCampaignWithConsensus } from '@/lib/types';
 
 export default function HomePage() {
@@ -25,9 +26,12 @@ export default function HomePage() {
 
   return (
     <div>
-      <header className="px-4 pt-6 pb-3">
-        <h1 className="text-xl font-bold text-gray-900">SodaPick</h1>
-        <p className="text-sm text-gray-500 mt-0.5">무료로 예측하고, 진짜 기프티콘을 받아보세요</p>
+      <header className="px-4 pt-6 pb-3 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">SodaPick</h1>
+          <p className="text-sm text-gray-500 mt-0.5">무료로 예측하고, 진짜 기프티콘을 받아보세요</p>
+        </div>
+        <NotificationBell variant="light" />
       </header>
 
       <div className="mb-3">

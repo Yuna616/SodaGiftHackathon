@@ -8,6 +8,7 @@ import {
   completeInvite,
   bumpMultiplier,
   hasMissionCompleted,
+  ensureRoundNotifications,
 } from "@/lib/repo";
 import { recordEvent } from "@/lib/analytics";
 
@@ -61,6 +62,8 @@ export async function POST(req: NextRequest) {
 
   const prediction = await createPrediction(participant.id, campaignId, selectedOption);
   await recordEvent("prediction_submitted", { participantId: participant.id, campaignId });
+  // 새 예측이 순위를 바꿨을 수 있으니 즉시 반영 (실패해도 제출 자체는 막지 않는다)
+  ensureRoundNotifications(campaign.round_id).catch(() => {});
 
   // 초대 리워드 처리: 신규 참가자일 때만 초대 완료로 인정 (부정 획득 방지)
   if (inviteToken) {
