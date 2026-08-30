@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toDisplayProducts } from '@/lib/products';
-import { toUSD } from '@/lib/exchangeRates';
+import { toUSD, fromUSD } from '@/lib/exchangeRates';
 import { getSession, setSession } from '@/lib/session';
 import { createBrowserSupabaseClient, signInWithGoogle } from '@/lib/supabase/client';
 import type { Product } from '@/lib/types';
@@ -27,17 +27,21 @@ type Participant = { id: string; email: string };
 // node:crypto가 같이 딸려온다) — 라벨만 필요해서 여기 따로 둔다. 스폰서 쪽
 // 마법사도 같은 이유로 로컬에 똑같이 정의해서 쓴다.
 const TYPE_LABELS: Record<string, string> = {
-  GIFT_CARD: '기프트카드',
-  DIGITAL_VOUCHER: '디지털 바우처',
-  MERCHANDISE: '실물상품',
+  GIFT_CARD: 'Gift card',
+  DIGITAL_VOUCHER: 'Digital voucher',
+  MERCHANDISE: 'Merchandise',
 };
 const TYPE_ORDER = ['GIFT_CARD', 'DIGITAL_VOUCHER', 'MERCHANDISE'];
 
 const BANNERS = [
-  { emoji: '🎁', title: '리워드로 득템하기', sub: '예측에 성공해서 모은 적립금, 여기서 바로 교환해요' },
-  { emoji: '🔥', title: '신상품 업데이트', sub: '소다기프트 카탈로그가 매일 새로 채워져요' },
-  { emoji: '💌', title: '친구에게 선물하기', sub: '상품 상세에서 바로 다른 사람에게 보낼 수 있어요' },
+  { emoji: '🎁', title: 'Spend your rewards', sub: 'Trade the balance you earned from predictions right here' },
+  { emoji: '🔥', title: 'New arrivals', sub: 'The SodaGift catalog refreshes every day' },
+  { emoji: '💌', title: 'Gift a friend', sub: 'Send an item straight to someone else from its product page' },
 ];
+
+function formatWalletKrw(usd: number): string {
+  return `KRW ${Math.round(fromUSD(usd, 'KRW')).toLocaleString()}`;
+}
 
 export default function StorePage() {
   const [participant, setParticipant] = useState<Participant | null>(null);
@@ -45,6 +49,7 @@ export default function StorePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [activeType, setActiveType] = useState<string | null>(null);
   const [cartCount, setCartCount] = useState(0);
+  const [walletBalanceUSD, setWalletBalanceUSD] = useState(0);
 
   function loadCartCount(participantId: string) {
     fetch(`/api/cart?participantId=${participantId}`)
@@ -53,6 +58,12 @@ export default function StorePage() {
         const items: { quantity: number }[] = data.items ?? [];
         setCartCount(items.reduce((sum, i) => sum + i.quantity, 0));
       });
+  }
+
+  function loadWalletBalance(participantId: string) {
+    fetch(`/api/participants/${participantId}/wallet`)
+      .then((r) => r.json())
+      .then((wallet) => setWalletBalanceUSD(wallet.balanceUSD ?? 0));
   }
 
   useEffect(() => {
@@ -64,6 +75,7 @@ export default function StorePage() {
     if (session) {
       setParticipant({ id: session.participantId, email: session.email });
       loadCartCount(session.participantId);
+      loadWalletBalance(session.participantId);
       setLoading(false);
       return;
     }
@@ -85,6 +97,7 @@ export default function StorePage() {
         setSession({ participantId: identified.participant.id, email: identified.participant.email });
         setParticipant({ id: identified.participant.id, email: identified.participant.email });
         loadCartCount(identified.participant.id);
+        loadWalletBalance(identified.participant.id);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -118,12 +131,12 @@ export default function StorePage() {
   if (!participant) {
     return (
       <div className="flex flex-col items-center justify-center p-4 pt-32">
-        <p className="mb-4 text-sm text-gray-500">로그인하면 스토어를 이용할 수 있어요</p>
+        <p className="mb-4 text-sm text-gray-500">Sign in to use the Store</p>
         <button
           onClick={() => signInWithGoogle('/store')}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700"
         >
-          Google 계정으로 로그인
+          Sign in with Google
         </button>
       </div>
     );
@@ -131,10 +144,10 @@ export default function StorePage() {
 
   return (
     <div className="pb-24">
-      <div className="flex items-center justify-between px-4 pt-6 pb-3">
+      <div className="flex items-center justify-between px-5 pt-6 pb-3.5">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">스토어</h1>
-          <p className="mt-0.5 text-sm text-gray-500">모은 리워드로 상품권을 교환해보세요</p>
+          <h1 className="text-[26px] font-extrabold tracking-[-0.5px] text-ink">Store</h1>
+          <p className="mt-1 text-[13px] text-[#8B9199]">Trade the rewards you earned for gift cards</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Link
@@ -151,6 +164,29 @@ export default function StorePage() {
         </div>
       </div>
 
+      <div className="mx-5 mb-[18px] flex items-center gap-3.5 rounded-[20px] bg-white p-4 shadow-[0_2px_10px_rgba(20,22,26,.05)]">
+        <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-full bg-accent-light">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0A8FB0" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1zM3 9l1.5-4h15L21 9M12 5v15" />
+          </svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="mb-[3px] text-[11.5px] font-semibold text-[#8B9199]">Your balance</div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[21px] font-extrabold leading-none tracking-[-0.6px] text-ink">
+              {`$${walletBalanceUSD.toLocaleString('en-US', { maximumFractionDigits: 2 })}`}
+            </span>
+            <span className="text-[11.5px] font-semibold text-accent-dark">{formatWalletKrw(walletBalanceUSD)}</span>
+          </div>
+        </div>
+        <Link
+          href="/my"
+          className="shrink-0 rounded-xl bg-[#F1F3F5] px-3.5 py-2.5 text-xs font-bold text-ink"
+        >
+          History
+        </Link>
+      </div>
+
       {/* 배너 — 오늘의 특가처럼 가짜 할인율을 지어내지 않고, 스토어/기능 안내 톤으로만
           구성. 손으로 넘기는 스크롤바 대신 시간에 따라 자동으로 넘어가는 캐러셀. */}
       <BannerCarousel />
@@ -162,7 +198,7 @@ export default function StorePage() {
             activeType === null ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
           }`}
         >
-          전체
+          All
         </button>
         {typeKeys.map((t) => (
           <button
@@ -196,7 +232,7 @@ export default function StorePage() {
                 ) : null}
                 {soldOut && (
                   <span className="absolute right-1.5 top-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-                    품절
+                    Sold out
                   </span>
                 )}
               </div>
@@ -211,7 +247,7 @@ export default function StorePage() {
           );
         })}
         {visibleProducts.length === 0 && (
-          <p className="col-span-2 py-10 text-center text-sm text-gray-400">해당 카테고리에 상품이 없어요</p>
+          <p className="col-span-2 py-10 text-center text-sm text-gray-400">No products in this category</p>
         )}
       </div>
     </div>
@@ -248,7 +284,7 @@ function BannerCarousel() {
             <button
               key={b.title}
               onClick={() => setIndex(i)}
-              aria-label={`배너 ${i + 1}번으로 이동`}
+              aria-label={`Go to banner ${i + 1}`}
               className={`h-1.5 rounded-full transition-all ${i === index ? 'w-4 bg-white' : 'w-1.5 bg-white/50'}`}
             />
           ))}

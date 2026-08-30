@@ -25,7 +25,7 @@ export default function ConsensusBar({
       <div className="flex items-center justify-between mb-1.5">
         <span className={`text-sm font-medium ${selected ? 'text-soda-600' : 'text-gray-800'}`}>{label}</span>
         <span className="text-xs text-gray-500 tabular-nums">
-          {count !== undefined ? `${count}명 · ` : ''}
+          {count !== undefined ? `${count} · ` : ''}
           {percent}%
         </span>
       </div>

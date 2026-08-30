@@ -13,11 +13,13 @@ body {
   max-width: 430px;
   margin: 0 auto;
   min-height: 100dvh;
-  background: #ffffff;
-  color: #0b0b0c;
+  background: #f5f6f8;
+  color: #14161a;
   position: relative;
-  padding-bottom: 84px;
-  font-family: var(--font-sodapick), sans-serif;
+  padding-bottom: 110px;
+  --font-sodapick: "Pretendard";
+  --font-logo: "Pacifico";
+  font-family: var(--font-sodapick), system-ui, sans-serif;
 }
 
 .tab-bar {

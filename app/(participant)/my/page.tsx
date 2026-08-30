@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getSession, setSession } from '@/lib/session';
 import { createBrowserSupabaseClient, signInWithGoogle } from '@/lib/supabase/client';
-import NotificationBell from '@/components/NotificationBell';
+import CountdownTimer from '@/components/CountdownTimer';
 import type { PublicCampaign, PublicPrediction, ClaimOrder } from '@/lib/types';
 import type { SodaProduct } from '@/lib/soda/client';
 
@@ -22,8 +22,8 @@ interface ProductInfo {
 }
 
 const CLAIM_STATUS_LABEL: Record<ClaimOrder['status'], { text: string; className: string }> = {
-  ISSUED: { text: '지급 완료', className: 'bg-emerald-50 text-emerald-600' },
-  FAILED: { text: '지급 실패', className: 'bg-rose-50 text-rose-500' },
+  ISSUED: { text: 'Delivered', className: 'bg-emerald-50 text-emerald-600' },
+  FAILED: { text: 'Failed', className: 'bg-rose-50 text-rose-500' },
 };
 
 function formatUsd(amount: number): string {
@@ -34,12 +34,11 @@ function formatUsd(amount: number): string {
 // 통화 그대로 표기한다. 상단 "누적 획득 리워드" 총액만 lib/exchangeRates
 // 기본 환율로 USD 환산해서 하나로 합친다(/api/participants/:id/wallet).
 function formatAmount(amount: number, currency: string | null): string {
-  const label = currency === 'KRW' ? '원' : (currency ?? '');
-  return `${amount.toLocaleString()} ${label}`.trim();
+  return `${currency ?? ''} ${amount.toLocaleString()}`.trim();
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 export default function MyPage() {
@@ -123,6 +122,11 @@ export default function MyPage() {
   const amountClaims = useMemo(() => claims.filter((p) => p.claimOrder.payout_amount != null), [claims]);
   const productClaims = useMemo(() => claims.filter((p) => p.claimOrder.selected_product_id), [claims]);
 
+  const livePicks = useMemo(() => (predictions ?? []).filter((p) => !p.isResolved), [predictions]);
+  const entryHistory = useMemo(() => (predictions ?? []).filter((p) => p.isResolved), [predictions]);
+  const winCount = useMemo(() => entryHistory.filter((p) => p.isWinner).length, [entryHistory]);
+  const hitRate = entryHistory.length > 0 ? Math.round((winCount / entryHistory.length) * 100) : 0;
+
   if (loading) {
     return (
       <div className="p-4">
@@ -140,122 +144,171 @@ export default function MyPage() {
           onClick={() => signInWithGoogle('/my')}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700"
         >
-          Google 계정으로 로그인
+          Sign in with Google
         </button>
       </div>
     );
   }
 
   return (
-    <div className="p-4">
-      <div className="pt-2 mb-5 flex items-start justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900">마이페이지</h1>
-          <p className="text-xs text-gray-400 mt-0.5">{participant.email}</p>
+    <div className="px-5 pb-8">
+      <div className="mb-[22px] flex items-center gap-3.5 pt-6">
+        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-gray-100 text-xl">👤</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[20px] font-extrabold leading-[1.25] tracking-[-0.3px] text-ink">
+            {participant.email.split('@')[0]}
+          </div>
+          <div className="mt-[3px] truncate text-[12.5px] font-medium text-[#8B9199]">{participant.email}</div>
         </div>
-        <NotificationBell variant="light" />
       </div>
 
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-gray-800 mb-2">획득 리워드</h2>
-
-        <div className="rounded-2xl bg-black p-5 mb-3">
-          <p className="text-xs text-gray-400 mb-1">누적 획득 리워드</p>
-          <p className="text-3xl font-extrabold text-white">{formatUsd(walletBalanceUSD)}</p>
-          <p className="mt-1 text-[11px] text-gray-500">스토어에서 쓸 수 있는 잔액(기본 환율로 USD 환산)</p>
+      <div className="mb-3 rounded-[28px] bg-ink px-[22px] py-6 text-white">
+        <div className="mb-2.5 text-[12.5px] font-semibold opacity-60">Total rewards earned</div>
+        <div className="flex items-baseline gap-2.5">
+          <span className="text-[42px] font-extrabold leading-none tracking-[-1.5px]">{formatUsd(walletBalanceUSD)}</span>
         </div>
+        <div className="mt-2 text-[11.5px] font-medium opacity-45">
+          Balance you can spend in the Store (converted to USD at the base rate)
+        </div>
+        <Link
+          href="/store"
+          className="mt-[18px] block w-full rounded-2xl bg-accent py-[15px] text-center text-[15px] font-extrabold text-[#052F3B]"
+        >
+          Spend in the Store
+        </Link>
+      </div>
 
-        {amountClaims.length > 0 && (
-          <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 mb-4">
-            {amountClaims.map((p) => (
-              <div key={p.id} className="flex items-center justify-between px-3 py-2.5">
-                <div>
-                  <p className="text-sm text-gray-800">{p.campaign.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatDate(p.claimOrder.created_at)}</p>
-                </div>
-                <span className="text-sm font-semibold text-gray-900 tabular-nums">
-                  {formatAmount(p.claimOrder.payout_amount ?? 0, p.claimOrder.payout_currency)}
+      {amountClaims.length > 0 && (
+        <div className="mb-3 rounded-xl border border-gray-200 divide-y divide-gray-100">
+          {amountClaims.map((p) => (
+            <div key={p.id} className="flex items-center justify-between px-3 py-2.5">
+              <div>
+                <p className="text-sm text-gray-800">{p.campaign.title}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatDate(p.claimOrder.created_at)}</p>
+              </div>
+              <span className="text-sm font-semibold text-gray-900 tabular-nums">
+                {formatAmount(p.claimOrder.payout_amount ?? 0, p.claimOrder.payout_currency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-[26px] flex gap-2.5">
+        {[
+          { v: String(entryHistory.length + livePicks.length), k: 'Entries' },
+          { v: String(winCount), k: 'Wins' },
+          { v: `${hitRate}%`, k: 'Hit rate' },
+        ].map((s) => (
+          <div key={s.k} className="flex-1 rounded-[20px] bg-white p-[15px_14px] shadow-[0_2px_10px_rgba(20,22,26,.04)]">
+            <div className="text-[20px] font-extrabold tracking-[-0.5px] text-ink">{s.v}</div>
+            <div className="mt-1 text-[11.5px] font-semibold text-[#9AA0A8]">{s.k}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-[17px] font-extrabold tracking-[-0.3px] text-ink">Live picks</h2>
+        <span className="text-[12.5px] font-bold text-accent-dark">{livePicks.length} open</span>
+      </div>
+      {livePicks.length === 0 ? (
+        <p className="mb-[26px] text-xs text-gray-400">No live picks right now</p>
+      ) : (
+        <div className="mb-[26px] flex flex-col gap-2.5">
+          {livePicks.map((p) => (
+            <Link
+              key={p.id}
+              href={`/campaigns/${p.campaign.id}`}
+              className="block rounded-[22px] bg-white p-4 shadow-[0_2px_10px_rgba(20,22,26,.04)]"
+            >
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="text-[14.5px] font-bold leading-[1.4] text-ink">{p.campaign.title}</div>
+                <CountdownTimer endAt={p.campaign.end_at} className="shrink-0 text-[11.5px] text-danger" />
+              </div>
+              <div className="mt-1.5 text-[12.5px] text-[#8B9199]">
+                Your pick ·{' '}
+                <span className="font-bold text-accent-dark">
+                  {p.campaign.options.find((o) => o.id === p.selected_option)?.label}
                 </span>
               </div>
-            ))}
-          </div>
-        )}
+            </Link>
+          ))}
+        </div>
+      )}
 
-        <p className="text-xs font-semibold text-gray-500 mb-2">상품 리스트</p>
-        {productClaims.length === 0 ? (
-          <p className="text-xs text-gray-400">아직 받은 상품이 없어요</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {productClaims.map((p) => {
-              const info = p.claimOrder.selected_product_id ? productMap[p.claimOrder.selected_product_id] : undefined;
-              const status = CLAIM_STATUS_LABEL[p.claimOrder.status];
-              return (
-                <Link
-                  key={p.id}
-                  href={`/my/rewards/${p.claimOrder.id}`}
-                  className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 active:bg-gray-50 transition"
-                >
-                  {info?.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={info.image_url} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
-                  ) : (
-                    <div className="h-11 w-11 shrink-0 rounded-lg bg-gray-100" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{info?.name ?? '상품 정보 확인 중'}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{info?.brand ?? p.campaign.title}</p>
+      <h2 className="mb-3 text-[17px] font-extrabold tracking-[-0.3px] text-ink">Entry history</h2>
+      {entryHistory.length === 0 ? (
+        <p className="mb-[26px] text-xs text-gray-400">No resolved entries yet</p>
+      ) : (
+        <div className="mb-[26px] rounded-[22px] bg-white p-1.5 shadow-[0_2px_10px_rgba(20,22,26,.04)]">
+          {entryHistory.map((p) => {
+            // 당첨됐는데 아직 리워드를 안 받은(claimOrder 없는) 경우엔 캠페인
+            // 상세로 보내는 대신 클레임 플로우로 바로 이어준다 — 안 그러면
+            // "Win" 뱃지만 뜨고 실제로 리워드를 받으러 갈 방법이 없었다.
+            const needsClaim = p.isWinner && !p.claimOrder;
+            const label = p.isWinner
+              ? needsClaim
+                ? { text: 'Claim reward →', className: 'bg-accent text-white' }
+                : { text: 'Win', className: 'bg-amber-100 text-amber-700' }
+              : { text: 'Lose', className: 'bg-gray-100 text-gray-400' };
+            return (
+              <Link
+                key={p.id}
+                href={needsClaim ? `/claim/${p.id}` : `/campaigns/${p.campaign.id}`}
+                className="flex items-center gap-3 rounded-2xl px-[15px] py-3.5 active:bg-gray-50 transition"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold text-ink">{p.campaign.title}</div>
+                  <div className="mt-1 text-xs font-medium text-[#9AA0A8]">
+                    {p.campaign.options.find((o) => o.id === p.selected_option)?.label} · {formatDate(p.campaign.end_at)}
                   </div>
-                  <span className={`text-[11px] font-semibold rounded-full px-2 py-1 shrink-0 ${status.className}`}>
-                    {status.text}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                </div>
+                <span className={`shrink-0 rounded-full px-3 py-1.5 text-[11.5px] font-extrabold ${label.className}`}>
+                  {label.text}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
-      <section>
-        <h2 className="text-sm font-semibold text-gray-800 mb-2">이벤트 참여 내역</h2>
-        {!predictions || predictions.length === 0 ? (
-          <p className="text-xs text-gray-400">아직 참여한 이벤트가 없어요</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {predictions.map((p) => {
-              // 당첨됐는데 아직 리워드를 안 받은(claimOrder 없는) 경우엔 캠페인
-              // 상세로 보내는 대신 클레임 플로우로 바로 이어준다 — 안 그러면
-              // "Win" 뱃지만 뜨고 실제로 리워드를 받으러 갈 방법이 없었다.
-              const needsClaim = p.isResolved && p.isWinner && !p.claimOrder;
-              const label = !p.isResolved
-                ? { text: '진행중', className: 'bg-blue-50 text-blue-500' }
-                : p.isWinner
-                  ? needsClaim
-                    ? { text: '리워드 받기 →', className: 'bg-soda-500 text-white' }
-                    : { text: 'Win', className: 'bg-amber-100 text-amber-700' }
-                  : { text: 'Lose', className: 'bg-gray-100 text-gray-400' };
-              return (
-                <Link
-                  key={p.id}
-                  href={needsClaim ? `/claim/${p.id}` : `/campaigns/${p.campaign.id}`}
-                  className={`flex items-center justify-between rounded-xl border p-3 active:bg-gray-50 transition ${
-                    needsClaim ? 'border-soda-300 bg-soda-50' : 'border-gray-200'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-gray-800 truncate">{p.campaign.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {p.campaign.options.find((o) => o.id === p.selected_option)?.label}
-                    </p>
-                  </div>
-                  <span className={`text-xs font-semibold rounded-full px-2.5 py-1 shrink-0 ${label.className}`}>
-                    {label.text}
-                  </span>
-                </Link>
-              );
-            })}
+      <h2 className="mb-3 text-[17px] font-extrabold tracking-[-0.3px] text-ink">My items</h2>
+      {productClaims.length === 0 ? (
+        <div className="rounded-[22px] border-[1.5px] border-dashed border-[#DFE2E6] px-5 py-7 text-center">
+          <div className="text-sm font-bold text-[#6B7280]">No items yet</div>
+          <div className="mt-1.5 text-[12.5px] leading-[1.6] text-[#9AA0A8]">
+            Win a prediction and your gift cards will pile up here
           </div>
-        )}
-      </section>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {productClaims.map((p) => {
+            const info = p.claimOrder.selected_product_id ? productMap[p.claimOrder.selected_product_id] : undefined;
+            const status = CLAIM_STATUS_LABEL[p.claimOrder.status];
+            return (
+              <Link
+                key={p.id}
+                href={`/my/rewards/${p.claimOrder.id}`}
+                className="flex items-center gap-3 rounded-xl border border-gray-200 p-3 active:bg-gray-50 transition"
+              >
+                {info?.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={info.image_url} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                ) : (
+                  <div className="h-11 w-11 shrink-0 rounded-lg bg-gray-100" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{info?.name ?? 'Checking product info'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{info?.brand ?? p.campaign.title}</p>
+                </div>
+                <span className={`text-[11px] font-semibold rounded-full px-2 py-1 shrink-0 ${status.className}`}>
+                  {status.text}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

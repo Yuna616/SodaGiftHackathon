@@ -47,7 +47,7 @@ function GiftNewContent() {
     const data = await res.json();
     setSubmitting(false);
     if (!res.ok) {
-      setError(data.error === 'PRODUCT_DISCONTINUED' ? '방금 품절된 상품이에요. 다른 상품을 선택해주세요' : '발송에 실패했어요');
+      setError(data.error === 'PRODUCT_DISCONTINUED' ? 'This item just sold out. Please choose another one' : 'Failed to send');
       return;
     }
     setOrder(data.order);
@@ -55,7 +55,7 @@ function GiftNewContent() {
 
   if (!senderParticipantId) {
     return (
-      <div className="p-6 text-center text-sm text-gray-400">잘못된 접근이에요</div>
+      <div className="p-6 text-center text-sm text-gray-400">Invalid access</div>
     );
   }
 
@@ -63,10 +63,10 @@ function GiftNewContent() {
     return (
       <div className="p-4 flex flex-col items-center text-center pt-12">
         <p className="text-4xl mb-3">💌</p>
-        <h1 className="text-lg font-bold text-gray-900 mb-1">선물을 보냈어요!</h1>
-        <p className="text-sm text-gray-500 mb-8">{recipientEmail}으로 곧 도착할 거예요</p>
+        <h1 className="text-lg font-bold text-gray-900 mb-1">Gift sent!</h1>
+        <p className="text-sm text-gray-500 mb-8">It'll arrive soon at {recipientEmail}</p>
         <Link href="/" className="text-sm text-soda-600 font-semibold underline">
-          SodaPick 캠페인 보러가기
+          See SodaPick campaigns
         </Link>
       </div>
     );
@@ -74,10 +74,10 @@ function GiftNewContent() {
 
   return (
     <div className="p-4">
-      <h1 className="text-lg font-bold text-gray-900 mb-1">친구에게 선물하기</h1>
-      <p className="text-sm text-gray-500 mb-5">SodaPick에서 받은 기쁨을 친구에게도 전해보세요</p>
+      <h1 className="text-lg font-bold text-gray-900 mb-1">Send a gift to a friend</h1>
+      <p className="text-sm text-gray-500 mb-5">Share the joy you got from SodaPick with a friend</p>
 
-      <p className="text-xs font-semibold text-gray-500 mb-2">상품 선택</p>
+      <p className="text-xs font-semibold text-gray-500 mb-2">Choose a product</p>
       <div className="flex flex-col gap-2 mb-5">
         {products.map((p) => (
           <ProductCard
@@ -89,7 +89,7 @@ function GiftNewContent() {
         ))}
       </div>
 
-      <label className="block text-xs font-medium text-gray-500 mb-1">받는 분 이메일</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Recipient email</label>
       <input
         type="email"
         value={recipientEmail}
@@ -98,7 +98,7 @@ function GiftNewContent() {
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:border-soda-400"
       />
 
-      <label className="block text-xs font-medium text-gray-500 mb-1">받는 분 이름 (선택)</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Recipient name (optional)</label>
       <input
         type="text"
         value={recipientName}
@@ -106,11 +106,11 @@ function GiftNewContent() {
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:border-soda-400"
       />
 
-      <label className="block text-xs font-medium text-gray-500 mb-1">메시지 (선택)</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">Message (optional)</label>
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="제 예측이 맞았어요, 당신도 한번 참여해보세요!"
+        placeholder="My prediction was right, you should try it too!"
         className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-4 outline-none focus:border-soda-400 resize-none"
         rows={3}
       />
@@ -122,7 +122,7 @@ function GiftNewContent() {
         disabled={!selectedProduct || !recipientEmail || submitting}
         className="w-full rounded-xl bg-black text-white font-semibold py-3 text-sm disabled:opacity-40"
       >
-        {submitting ? '보내는 중...' : '선물 보내기'}
+        {submitting ? 'Sending...' : 'Send gift'}
       </button>
     </div>
   );

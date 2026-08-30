@@ -31,7 +31,7 @@ export default function NotificationBell({ variant = 'dark' }: NotificationBellP
   return (
     <Link
       href="/notifications"
-      aria-label="활동알림"
+      aria-label="Activity"
       className={`relative h-8 w-8 rounded-full flex items-center justify-center backdrop-blur ${
         isDark ? 'bg-black/50 text-white' : 'bg-gray-100 text-gray-700'
       }`}

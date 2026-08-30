@@ -31,9 +31,9 @@ export default function ProductCard({
       </div>
       <div className="text-right">
         <p className="text-sm font-semibold text-gray-700">
-          {product.price.toLocaleString()} {product.currency === 'KRW' ? '원' : product.currency}
+          {product.currency} {product.price.toLocaleString()}
         </p>
-        {soldOut && <p className="text-[11px] text-rose-400 mt-0.5">품절</p>}
+        {soldOut && <p className="text-[11px] text-rose-400 mt-0.5">Sold out</p>}
       </div>
     </button>
   );
