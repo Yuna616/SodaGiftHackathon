@@ -67,9 +67,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "발행된 캠페인은 라운드를 추가할 수 없습니다" }, { status: 400 });
   }
 
+  // insert가 아니라 upsert: 마법사에서 예산 확인 단계로 갔다가 "이전 화면으로
+  // 돌아가기"로 되돌아와 값을 고친 뒤 다시 "다음"을 누르면, 같은 campaign_id +
+  // round_number로 또 저장을 시도하면서 rounds_campaign_id_round_number_key
+  // unique 제약을 건드리는 문제가 있었다. draft 상태에서 재제출은 그냥 덮어쓰는
+  // 게 맞는 동작이라 upsert로 멱등하게 만든다.
   const { data, error } = await supabase
     .from("rounds")
-    .insert({ ...parsed.data, campaign_id: params.id, status: "upcoming" })
+    .upsert(
+      { ...parsed.data, campaign_id: params.id, status: "upcoming" },
+      { onConflict: "campaign_id,round_number" }
+    )
     .select()
     .single();
 
