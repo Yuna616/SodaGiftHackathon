@@ -181,6 +181,7 @@ export interface PublicCampaign {
   thumbnail_url: string;
   media_url: string;
   media_type: "image" | "video";
+  mission_url: string | null; // 참여 전 방문해야 하는 스폰서 지정 페이지, null이면 미션 없음
   created_at: string;
 }
 
@@ -272,6 +273,7 @@ export const ANALYTICS_EVENTS = [
   "claim_started",
   "claim_completed",
   "sender_cta_clicked",
+  "mission_completed",
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];

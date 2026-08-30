@@ -10,6 +10,9 @@ const TABS = [
 
 export default function BottomNav() {
   const pathname = usePathname();
+  // 캠페인 상세 화면은 플로팅 PICK 바가 이 자리를 대신한다 (핵심 행동에 집중)
+  if (pathname?.startsWith('/campaigns/')) return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 border-t border-gray-200 bg-white/95 backdrop-blur">
       <div className="tab-bar flex">

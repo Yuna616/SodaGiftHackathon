@@ -59,6 +59,7 @@ function toPublicCampaign(campaign: CampaignRow, round: RoundRow, sponsorName: s
     thumbnail_url: campaign.thumbnail_url,
     media_url: campaign.media_url,
     media_type: campaign.media_type,
+    mission_url: campaign.mission_url,
     created_at: campaign.created_at,
   };
 }
@@ -177,6 +178,20 @@ export async function getConsensusTrend(id: string): Promise<ConsensusTrendPoint
     points.push({ at: p.submitted_at, total, percents });
   }
   return points;
+}
+
+export async function hasMissionCompleted(campaignId: string, participantId: string): Promise<boolean> {
+  const supabase = sb();
+  // select("*") 유지 — mission_completions에서 좁은 컬럼 지정 + maybeSingle() 조합이
+  // 에러 없이 항상 빈 값을 반환하는 현상이 있었다(app/api/campaigns/[id]/missions/status
+  // 라우트에서도 동일하게 우회함).
+  const { data } = await supabase
+    .from("mission_completions")
+    .select("*")
+    .eq("campaign_id", campaignId)
+    .eq("participant_id", participantId)
+    .maybeSingle();
+  return !!data;
 }
 
 export async function findParticipantByEmail(email: string): Promise<Participant | null> {

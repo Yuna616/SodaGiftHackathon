@@ -13,5 +13,12 @@ export function createServiceRoleClient() {
 
   return createClient(url, serviceRoleKey, {
     auth: { persistSession: false },
+    // Next.js가 fetch()를 전역 패치해서 Supabase 클라이언트 내부 요청까지 캐싱하는
+    // 경우가 있었다(force-dynamic을 걸어도 특정 select 조합에서 재현됨 — 방금 쓴 값을
+    // 못 읽어오는 stale read 문제). PostgREST 호출은 매번 최신 상태를 봐야 하므로
+    // 여기서 명시적으로 캐시를 끈다.
+    global: {
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }

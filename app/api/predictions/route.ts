@@ -7,6 +7,7 @@ import {
   findInviteByToken,
   completeInvite,
   bumpMultiplier,
+  hasMissionCompleted,
 } from "@/lib/repo";
 import { recordEvent } from "@/lib/analytics";
 
@@ -48,6 +49,14 @@ export async function POST(req: NextRequest) {
   const existing = await findPrediction(participant.id, campaignId);
   if (existing) {
     return NextResponse.json({ prediction: existing, participant, alreadySubmitted: true });
+  }
+
+  // 참여 미션(사이트 방문)이 있는 캠페인은 완료 기록이 없으면 제출을 막는다
+  if (campaign.mission_url) {
+    const completed = await hasMissionCompleted(campaignId, participant.id);
+    if (!completed) {
+      return NextResponse.json({ error: "MISSION_REQUIRED", participantId: participant.id }, { status: 403 });
+    }
   }
 
   const prediction = await createPrediction(participant.id, campaignId, selectedOption);
