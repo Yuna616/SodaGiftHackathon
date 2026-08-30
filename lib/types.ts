@@ -28,6 +28,11 @@ export type RewardClaimStatus = (typeof REWARD_CLAIM_STATUS)[number];
 export const DISPUTE_TICKET_STATUS = ["open", "reviewing", "closed"] as const;
 export type DisputeTicketStatus = (typeof DISPUTE_TICKET_STATUS)[number];
 
+// 0006 마이그레이션: Google OAuth(Supabase Auth)로 가입하면 트리거가 자동으로 active를 세팅.
+// 정지 등 비활성화는 운영자가 수동으로 inactive로 바꾸는 용도.
+export const PARTICIPANT_STATUS = ["active", "inactive"] as const;
+export type ParticipantStatus = (typeof PARTICIPANT_STATUS)[number];
+
 // 0002 마이그레이션: 라운드별 보상 방식. PRODUCT = 카탈로그 상품 지급(기존),
 // CREDIT = 라운드에 건 고정 풀 금액을 정답자 수로 나눠 갖는 배당형.
 export const REWARD_MODE = ["PRODUCT", "CREDIT"] as const;
@@ -92,6 +97,9 @@ export interface Participant {
   country: string | null;
   referral_code: string;
   invited_by: string | null;
+  // 0006 마이그레이션: Google OAuth 연동
+  status: ParticipantStatus;
+  auth_user_id: string | null; // auth.users.id, Google 로그인 전이면 null
   created_at: string;
 }
 
@@ -181,6 +189,7 @@ export interface PublicCampaign {
   thumbnail_url: string;
   media_url: string;
   media_type: "image" | "video";
+  mission_url: string | null; // 참여 전 방문해야 하는 스폰서 지정 페이지, null이면 미션 없음
   created_at: string;
 }
 
@@ -218,6 +227,8 @@ export interface ClaimOrder {
   external_reference_id: string;
   soda_order_id: string | null;
   status: ClaimOrderStatus;
+  payout_amount: number | null; // CREDIT 모드에서만 값이 있음
+  payout_currency: string | null;
   created_at: string;
 }
 
@@ -272,6 +283,7 @@ export const ANALYTICS_EVENTS = [
   "claim_started",
   "claim_completed",
   "sender_cta_clicked",
+  "mission_completed",
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[number];

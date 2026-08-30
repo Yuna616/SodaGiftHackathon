@@ -28,9 +28,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ completed: true, mission_required: false });
   }
 
+  // 주의: mission_completions에서 select("completed_at") 같은 좁은 컬럼 지정 +
+  // .maybeSingle()을 같이 쓰면 에러 없이 결과가 항상 빈 값으로 나오는 현상이 있었다
+  // (campaigns 테이블 등 다른 곳에선 같은 패턴이 멀쩡히 동작함 — 이 테이블/컬럼 조합에서만
+  // 재현됨, 원인 미상). select("*")로 우회.
   const { data: completion } = await supabase
     .from("mission_completions")
-    .select("completed_at")
+    .select("*")
     .eq("campaign_id", params.id)
     .eq("participant_id", participantId)
     .maybeSingle();

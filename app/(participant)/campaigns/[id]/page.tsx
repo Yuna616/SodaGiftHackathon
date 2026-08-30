@@ -1,19 +1,22 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ConsensusBar from '@/components/ConsensusBar';
 import ConsensusTrendChart from '@/components/ConsensusTrendChart';
 import CountdownTimer from '@/components/CountdownTimer';
 import InviteShareSheet from '@/components/InviteShareSheet';
+import FloatingPickBar, { type PickBarVariant } from '@/components/FloatingPickBar';
+import GoogleAccountPicker from '@/components/GoogleAccountPicker';
 import { track } from '@/lib/track';
-import { getSession, setSession, getPendingInvite, clearPendingInvite } from '@/lib/session';
 import { toDisplayProducts } from '@/lib/products';
+import { getSession, setSession, getPendingInvite, clearPendingInvite } from '@/lib/session';
 import type { PublicCampaignWithConsensus, ConsensusTrendPoint, Product } from '@/lib/types';
 import type { SodaProduct } from '@/lib/soda/client';
 
 type Stage = 'pick' | 'confirm' | 'submitting' | 'done' | 'already';
+type PendingAction = 'submit' | 'visit' | null;
 
 function formatPrize(campaign: PublicCampaignWithConsensus): string {
   if (campaign.prize_type === 'amount' && campaign.prize_amount) {
@@ -23,8 +26,18 @@ function formatPrize(campaign: PublicCampaignWithConsensus): string {
 }
 
 export default function CampaignDetailPage() {
+  return (
+    <Suspense fallback={<div className="p-4"><div className="h-40 rounded-2xl bg-gray-100 animate-pulse" /></div>}>
+      <CampaignDetailContent />
+    </Suspense>
+  );
+}
+
+function CampaignDetailContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedOption = searchParams.get('option');
 
   const [campaign, setCampaign] = useState<PublicCampaignWithConsensus | null>(null);
   const [trend, setTrend] = useState<ConsensusTrendPoint[]>([]);
@@ -34,7 +47,14 @@ export default function CampaignDetailPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [participantId, setParticipantId] = useState<string | null>(null);
+  const [gateCleared, setGateCleared] = useState(false);
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [pendingAfterLogin, setPendingAfterLogin] = useState<PendingAction>(null);
+  const [missionHighlight, setMissionHighlight] = useState(false);
   const viewedTracked = useRef(false);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const inviteRef = useRef<HTMLDivElement>(null);
+  const missionSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -76,9 +96,18 @@ export default function CampaignDetailPage() {
     viewedTracked.current = true;
     track('campaign_viewed', { campaignId: campaign.id });
 
+    const applyPreselectedOption = () => {
+      if (campaign.status !== 'active') return;
+      if (preselectedOption && campaign.options.some((o) => o.id === preselectedOption)) {
+        setSelected(preselectedOption);
+        setStage('confirm');
+      }
+    };
+
     const session = getSession();
     if (session) {
       setEmail(session.email);
+      setParticipantId(session.participantId);
       fetch('/api/participants/lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,11 +120,21 @@ export default function CampaignDetailPage() {
             setSelected(existing.selected_option);
             setParticipantId(data.participant.id);
             setStage('already');
+            return;
+          }
+          applyPreselectedOption();
+          if (campaign.mission_url) {
+            fetch(`/api/campaigns/${campaign.id}/missions/status?participant_id=${session.participantId}`)
+              .then((r) => r.json())
+              .then((status) => setGateCleared(!!status.completed))
+              .catch(() => {});
           }
         })
         .catch(() => {});
+    } else {
+      applyPreselectedOption();
     }
-  }, [campaign]);
+  }, [campaign, preselectedOption]);
 
   if (!campaign) {
     return (
@@ -108,8 +147,9 @@ export default function CampaignDetailPage() {
 
   const closed = campaign.status !== 'active';
 
-  async function handleSubmit() {
-    if (!selected || !email) return;
+  async function handleSubmit(emailArg?: string) {
+    const submitEmail = emailArg ?? email;
+    if (!selected || !submitEmail) return;
     setStage('submitting');
     setError(null);
     const inviteToken = getPendingInvite();
@@ -119,13 +159,20 @@ export default function CampaignDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           campaignId: campaign!.id,
-          email,
+          email: submitEmail,
           selectedOption: selected,
           inviteToken: inviteToken ?? undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.error === 'MISSION_REQUIRED') {
+          if (data.participantId) setParticipantId(data.participantId);
+          setGateCleared(false);
+          setStage('confirm');
+          focusMissionSection();
+          return;
+        }
         setError(data.error === 'CAMPAIGN_CLOSED' ? '이미 마감된 캠페인입니다' : '제출에 실패했습니다');
         setStage('confirm');
         return;
@@ -141,8 +188,114 @@ export default function CampaignDetailPage() {
     }
   }
 
+  function focusMissionSection() {
+    setMissionHighlight(true);
+    missionSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => setMissionHighlight(false), 2200);
+  }
+
+  async function ensureParticipantId(currentEmail: string): Promise<string> {
+    if (participantId) return participantId;
+    const res = await fetch('/api/participants/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentEmail }),
+    });
+    const data = await res.json();
+    setParticipantId(data.participant.id);
+    setSession({ participantId: data.participant.id, email: currentEmail });
+    return data.participant.id;
+  }
+
+  async function doMissionVisit(currentEmail: string) {
+    const pid = await ensureParticipantId(currentEmail);
+    window.open(`/api/campaigns/${campaign!.id}/missions/visit?participant_id=${pid}`, '_blank', 'noopener,noreferrer');
+    setGateCleared(true);
+    track('mission_completed', { participantId: pid, campaignId: campaign!.id });
+  }
+
+  async function checkMissionAndProceed(currentEmail: string) {
+    if (!campaign!.mission_url) {
+      handleSubmit(currentEmail);
+      return;
+    }
+    const pid = await ensureParticipantId(currentEmail);
+    const res = await fetch(`/api/campaigns/${campaign!.id}/missions/status?participant_id=${pid}`);
+    const data = await res.json();
+    if (!data.completed) {
+      setGateCleared(false);
+      focusMissionSection();
+      return;
+    }
+    setGateCleared(true);
+    handleSubmit(currentEmail);
+  }
+
+  function handlePickAttempt() {
+    if (email) {
+      checkMissionAndProceed(email);
+    } else {
+      setPendingAfterLogin('submit');
+      setShowAccountPicker(true);
+    }
+  }
+
+  function handleMissionVisitClick() {
+    if (email) {
+      doMissionVisit(email);
+    } else {
+      setPendingAfterLogin('visit');
+      setShowAccountPicker(true);
+    }
+  }
+
+  function handleAccountPicked(pickedEmail: string) {
+    setEmail(pickedEmail);
+    setShowAccountPicker(false);
+    if (pendingAfterLogin === 'visit') {
+      setPendingAfterLogin(null);
+      doMissionVisit(pickedEmail);
+    } else {
+      setPendingAfterLogin(null);
+      checkMissionAndProceed(pickedEmail);
+    }
+  }
+
+  // 플로팅 바: 지금 이 화면에서 참가자가 다음으로 해야 할 단 하나의 행동을 항상 보여준다.
+  // 미션 게이트는 이 바의 기본 라벨을 가리지 않는다 — 항상 "PICK"이고, 미완료 상태에서
+  // 누르면 하단 미션 섹션으로 포커스만 이동한다.
+  function pickBarProps(): { variant: PickBarVariant; label: string; subtext?: string; onClick: () => void } {
+    if (closed) {
+      return { variant: 'hidden', label: '', onClick: () => {} };
+    }
+    if (stage === 'done' || stage === 'already') {
+      return {
+        variant: 'invite',
+        label: '친구 초대하고 배수 올리기',
+        onClick: () => inviteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      };
+    }
+    if (stage === 'submitting') {
+      return { variant: 'muted', label: '제출 중이에요...', onClick: () => {} };
+    }
+    if (!selected) {
+      return {
+        variant: 'muted',
+        label: '옵션을 선택해주세요',
+        onClick: () => optionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      };
+    }
+    return {
+      variant: 'primary',
+      label: 'PICK',
+      onClick: handlePickAttempt,
+    };
+  }
+
+  const barProps = pickBarProps();
+
   return (
-    <div className="pb-6">
+    <div className="pb-28">
       <div className="relative aspect-[16/9] w-full bg-black">
         {campaign.media_url ? (
           campaign.media_type === 'video' ? (
@@ -195,7 +348,7 @@ export default function CampaignDetailPage() {
       <div className="p-4">
         <p className="text-sm text-gray-600 mb-4">{campaign.resolution_criteria}</p>
 
-        <div className="flex flex-col gap-2 mb-4">
+        <div ref={optionsRef} className="flex flex-col gap-2 mb-4">
           {campaign.options.map((opt) => (
             <ConsensusBar
               key={opt.id}
@@ -243,34 +396,8 @@ export default function CampaignDetailPage() {
           <p className="text-sm text-center text-gray-400 py-6">이미 마감된 캠페인입니다</p>
         )}
 
-        {!closed && stage === 'confirm' && selected && (
-          <div className="rounded-2xl border border-gray-200 p-4">
-            <p className="text-sm font-medium text-gray-800 mb-3">
-              선택하신 예측:{' '}
-              <span className="text-soda-600 font-semibold">
-                {campaign.options.find((o) => o.id === selected)?.label}
-              </span>
-            </p>
-            <label className="block text-xs font-medium text-gray-500 mb-1">이메일로 참여</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3 outline-none focus:border-soda-400"
-            />
-            {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
-            <button
-              onClick={handleSubmit}
-              disabled={!email}
-              className="w-full rounded-xl bg-black text-white font-semibold py-3 text-sm disabled:opacity-40"
-            >
-              제출하기
-            </button>
-            <p className="text-[11px] text-gray-400 mt-2 text-center">
-              비밀번호나 결제 정보 없이, 이메일만으로 참여할 수 있어요
-            </p>
-          </div>
+        {!closed && stage === 'confirm' && error && (
+          <p className="text-xs text-center text-rose-500 mb-4">{error}</p>
         )}
 
         {stage === 'submitting' && (
@@ -278,7 +405,7 @@ export default function CampaignDetailPage() {
         )}
 
         {(stage === 'done' || stage === 'already') && participantId && (
-          <div className="flex flex-col gap-4">
+          <div ref={inviteRef} className="flex flex-col gap-4">
             <div className="rounded-2xl bg-soda-50 border border-soda-100 p-4 text-center">
               <p className="text-sm font-semibold text-soda-700">
                 {stage === 'already' ? '이미 참여하셨어요' : '예측 제출 완료!'}
@@ -296,7 +423,53 @@ export default function CampaignDetailPage() {
             )}
           </div>
         )}
+
+        {campaign.mission_url && (
+          <div
+            ref={missionSectionRef}
+            className={`mt-5 rounded-2xl border p-4 transition ${
+              missionHighlight ? 'border-rose-400 ring-2 ring-rose-200' : 'border-gray-200'
+            }`}
+          >
+            {gateCleared ? (
+              <>
+                <p className="text-sm font-semibold text-gray-900 mb-3">
+                  ✓ {campaign.sponsor_name} 페이지 방문을 완료했어요
+                </p>
+                <button disabled className="w-full rounded-xl bg-gray-100 text-gray-400 font-semibold py-3 text-sm">
+                  페이지 방문 완료
+                </button>
+              </>
+            ) : (
+              <>
+                <p className={`text-sm mb-3 ${missionHighlight ? 'text-rose-600 font-semibold' : 'text-gray-700'}`}>
+                  {missionHighlight
+                    ? '해당 페이지를 방문하셔야 참여하실 수 있습니다'
+                    : `${campaign.sponsor_name}가 준비한 페이지를 방문하면 PICK에 참여할 수 있어요`}
+                </p>
+                <button
+                  onClick={handleMissionVisitClick}
+                  className="w-full rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700"
+                >
+                  {campaign.sponsor_name} 이벤트 페이지 방문하기
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      <FloatingPickBar {...barProps} />
+
+      {showAccountPicker && (
+        <GoogleAccountPicker
+          onSelect={handleAccountPicked}
+          onClose={() => {
+            setShowAccountPicker(false);
+            setPendingAfterLogin(null);
+          }}
+        />
+      )}
     </div>
   );
 }
