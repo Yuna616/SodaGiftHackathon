@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getSession, setSession } from '@/lib/session';
 import { createBrowserSupabaseClient, signInWithGoogle } from '@/lib/supabase/client';
+import NotificationBell from '@/components/NotificationBell';
 import type { PublicCampaign, PublicPrediction, ClaimOrder } from '@/lib/types';
 import type { SodaProduct } from '@/lib/soda/client';
 
@@ -147,9 +148,12 @@ export default function MyPage() {
 
   return (
     <div className="p-4">
-      <div className="pt-2 mb-5">
-        <h1 className="text-lg font-bold text-gray-900">마이페이지</h1>
-        <p className="text-xs text-gray-400 mt-0.5">{participant.email}</p>
+      <div className="pt-2 mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-lg font-bold text-gray-900">마이페이지</h1>
+          <p className="text-xs text-gray-400 mt-0.5">{participant.email}</p>
+        </div>
+        <NotificationBell variant="light" />
       </div>
 
       <section className="mb-8">

@@ -18,11 +18,12 @@ import type { SodaProduct } from '@/lib/soda/client';
 type Stage = 'pick' | 'confirm' | 'submitting' | 'done' | 'already';
 type PendingAction = 'submit' | 'visit' | null;
 
-function formatPrize(campaign: PublicCampaignWithConsensus): string {
-  if (campaign.prize_type === 'amount' && campaign.prize_amount) {
-    return `💰 ${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? '원'} 상당`;
-  }
-  return `🎁 ${campaign.prize_label}`;
+function formatPrizeLine(campaign: PublicCampaignWithConsensus): string {
+  const reward =
+    campaign.prize_type === 'amount' && campaign.prize_amount
+      ? `${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? '원'}`
+      : `🎁 ${campaign.prize_label}`;
+  return campaign.winner_count !== null ? `${reward} · 최대 ${campaign.winner_count}명` : reward;
 }
 
 export default function CampaignDetailPage() {
@@ -262,11 +263,20 @@ function CampaignDetailContent() {
   }
 
   // 플로팅 바: 지금 이 화면에서 참가자가 다음으로 해야 할 단 하나의 행동을 항상 보여준다.
+  // 스크롤 위치와 무관하게 하단에 늘 떠 있어야 하므로, 마감된 캠페인이라도 숨기지 않고
+  // 상태에 맞는 안내 문구로 채운다 (variant: 'hidden'은 이제 안 쓰지만 타입은 유지).
   // 미션 게이트는 이 바의 기본 라벨을 가리지 않는다 — 항상 "PICK"이고, 미완료 상태에서
   // 누르면 하단 미션 섹션으로 포커스만 이동한다.
   function pickBarProps(): { variant: PickBarVariant; label: string; subtext?: string; onClick: () => void } {
     if (closed) {
-      return { variant: 'hidden', label: '', onClick: () => {} };
+      if (stage === 'done' || stage === 'already') {
+        return {
+          variant: 'muted',
+          label: '결과는 마이페이지에서 확인하세요',
+          onClick: () => router.push('/my'),
+        };
+      }
+      return { variant: 'muted', label: '이미 마감된 캠페인입니다', onClick: () => {} };
     }
     if (stage === 'done' || stage === 'already') {
       return {
@@ -322,18 +332,11 @@ function CampaignDetailContent() {
       </div>
 
       <div className="p-4 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-soda-600 bg-soda-50 rounded-full px-2.5 py-1">
-            {campaign.sponsor_name} 제공
-          </span>
-          {campaign.winner_count !== null && (
-            <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">
-              총 {campaign.winner_count}명 당첨
-            </span>
-          )}
-        </div>
-        <h1 className="text-2xl font-extrabold text-gray-900 leading-snug mb-1">{campaign.title}</h1>
-        <p className="text-sm text-gray-500 mb-3">{formatPrize(campaign)}</p>
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-soda-600 bg-soda-50 rounded-full px-2.5 py-1">
+          {campaign.sponsor_name} 제공
+        </span>
+        <h1 className="text-2xl font-extrabold text-gray-900 leading-snug mt-2 mb-1">{campaign.title}</h1>
+        <p className="text-sm text-gray-500 text-right mb-3">{formatPrizeLine(campaign)}</p>
         <div className="flex items-center gap-3 text-xs text-gray-500">
           {campaign.status === 'active' ? (
             <CountdownTimer endAt={campaign.end_at} />
@@ -369,65 +372,10 @@ function CampaignDetailContent() {
           <ConsensusTrendChart options={campaign.options} points={trend} />
         </div>
 
-        {stage !== 'done' && stage !== 'already' && campaign.prize_type === 'amount' && (
-          <div className="mb-5 rounded-xl bg-gray-50 p-3">
-            <p className="text-xs font-semibold text-gray-500 mb-1">당첨 시 받을 수 있는 보상</p>
-            <p className="text-xs text-gray-600">
-              정답자들이 {campaign.prize_amount?.toLocaleString()} {campaign.prize_currency}를 나눠 가져요.
-              당첨되면 따로 고를 것 없이 마이페이지 &quot;누적 획득 리워드&quot;에 바로 더해져요.
-            </p>
-          </div>
-        )}
-
-        {products.length > 0 && stage !== 'done' && stage !== 'already' && campaign.prize_type === 'item' && (
-          <div className="mb-5 rounded-xl bg-gray-50 p-3">
-            <p className="text-xs font-semibold text-gray-500 mb-2">당첨 시 받을 수 있는 상품 미리보기</p>
-            <div className="flex gap-2 flex-wrap">
-              {products.map((p) => (
-                <span key={p.id} className="text-xs bg-white border border-gray-200 rounded-full px-2.5 py-1">
-                  {p.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {closed && stage !== 'already' && (
-          <p className="text-sm text-center text-gray-400 py-6">이미 마감된 캠페인입니다</p>
-        )}
-
-        {!closed && stage === 'confirm' && error && (
-          <p className="text-xs text-center text-rose-500 mb-4">{error}</p>
-        )}
-
-        {stage === 'submitting' && (
-          <div className="text-center py-6 text-sm text-gray-400">제출 중이에요...</div>
-        )}
-
-        {(stage === 'done' || stage === 'already') && participantId && (
-          <div ref={inviteRef} className="flex flex-col gap-4">
-            <div className="rounded-2xl bg-soda-50 border border-soda-100 p-4 text-center">
-              <p className="text-sm font-semibold text-soda-700">
-                {stage === 'already' ? '이미 참여하셨어요' : '예측 제출 완료!'}
-              </p>
-              <p className="text-xs text-soda-600 mt-1">
-                {campaign.options.find((o) => o.id === selected)?.label}에 예측했어요. 결과는 마이페이지에서
-                확인할 수 있어요.
-              </p>
-              <Link href="/my" className="inline-block mt-3 text-xs font-semibold text-soda-700 underline">
-                마이페이지로 이동
-              </Link>
-            </div>
-            {!closed && (
-              <InviteShareSheet participantId={participantId} campaignId={campaign.id} campaignTitle={campaign.title} />
-            )}
-          </div>
-        )}
-
         {campaign.mission_url && (
           <div
             ref={missionSectionRef}
-            className={`mt-5 rounded-2xl border p-4 transition ${
+            className={`mb-5 rounded-2xl border p-4 transition ${
               missionHighlight ? 'border-rose-400 ring-2 ring-rose-200' : 'border-gray-200'
             }`}
           >
@@ -454,6 +402,63 @@ function CampaignDetailContent() {
                   {campaign.sponsor_name} 이벤트 페이지 방문하기
                 </button>
               </>
+            )}
+          </div>
+        )}
+
+        {stage !== 'done' && stage !== 'already' && campaign.prize_type === 'amount' && (
+          <div className="mb-5 rounded-2xl bg-soda-50 border border-soda-100 p-4">
+            <p className="text-sm font-bold text-soda-700 mb-1.5">🎉 당첨 시 받을 수 있는 보상</p>
+            <p className="text-base text-gray-800 leading-relaxed">
+              정답자들이{' '}
+              <span className="font-extrabold text-soda-600">
+                {campaign.prize_amount?.toLocaleString()}{campaign.prize_currency}
+              </span>
+              을 N분의 1로 나눠 가져요.
+            </p>
+          </div>
+        )}
+
+        {products.length > 0 && stage !== 'done' && stage !== 'already' && campaign.prize_type === 'item' && (
+          <div className="mb-5 rounded-2xl bg-soda-50 border border-soda-100 p-4">
+            <p className="text-sm font-bold text-soda-700 mb-2">🎉 당첨 시 받을 수 있는 상품 미리보기</p>
+            <div className="flex gap-2 flex-wrap">
+              {products.map((p) => (
+                <span
+                  key={p.id}
+                  className="text-sm font-medium bg-white border border-soda-200 text-gray-800 rounded-full px-3 py-1.5"
+                >
+                  {p.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!closed && stage === 'confirm' && error && (
+          <p className="text-xs text-center text-rose-500 mb-4">{error}</p>
+        )}
+
+        {stage === 'submitting' && (
+          <div className="text-center py-6 text-sm text-gray-400">제출 중이에요...</div>
+        )}
+
+        {(stage === 'done' || stage === 'already') && participantId && (
+          <div ref={inviteRef} className="flex flex-col gap-4">
+            <div className="rounded-2xl bg-soda-50 border border-soda-100 p-4 text-center">
+              <p className="text-sm font-semibold text-soda-700">
+                {stage === 'already' ? '이미 참여하셨어요' : '예측 제출 완료!'}
+              </p>
+              <p className="text-xs text-soda-600 mt-1">
+                {campaign.options.find((o) => o.id === selected)?.label}에 예측했어요. 결과는 마이페이지에서
+                확인할 수 있어요.
+              </p>
+              <Link href="/my" className="inline-block mt-3 text-xs font-semibold text-soda-700 underline">
+                마이페이지로 이동
+              </Link>
+            </div>
+            {!closed && (
+              <InviteShareSheet participantId={participantId} campaignId={campaign.id} campaignTitle={campaign.title} />
             )}
           </div>
         )}

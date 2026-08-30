@@ -14,6 +14,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   esports: "e스포츠",
   variety: "예능",
   drama: "드라마",
+  beauty: "뷰티",
 };
 
 export type RoundSummary = {

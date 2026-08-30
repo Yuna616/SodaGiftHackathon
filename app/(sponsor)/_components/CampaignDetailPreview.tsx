@@ -10,11 +10,12 @@ import ConsensusBar from "@/components/ConsensusBar";
 import CountdownTimer from "@/components/CountdownTimer";
 import type { PublicCampaignWithConsensus } from "@/lib/types";
 
-function formatPrize(campaign: PublicCampaignWithConsensus): string {
-  if (campaign.prize_type === "amount" && campaign.prize_amount) {
-    return `💰 ${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? "원"} 상당`;
-  }
-  return `🎁 ${campaign.prize_label}`;
+function formatPrizeLine(campaign: PublicCampaignWithConsensus): string {
+  const reward =
+    campaign.prize_type === "amount" && campaign.prize_amount
+      ? `${campaign.prize_amount.toLocaleString()}${campaign.prize_currency ?? "원"}`
+      : `🎁 ${campaign.prize_label}`;
+  return campaign.winner_count !== null ? `${reward} · 최대 ${campaign.winner_count}명` : reward;
 }
 
 export function CampaignDetailPreview({ campaign }: { campaign: PublicCampaignWithConsensus }) {
@@ -29,18 +30,11 @@ export function CampaignDetailPreview({ campaign }: { campaign: PublicCampaignWi
       </div>
 
       <div className="border-b border-gray-100 p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-soda-50 px-2.5 py-1 text-xs font-semibold text-soda-600">
-            {sponsor} 제공
-          </span>
-          {campaign.winner_count !== null && (
-            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
-              총 {campaign.winner_count}명 당첨
-            </span>
-          )}
-        </div>
-        <h1 className="mb-1 text-2xl font-extrabold leading-snug text-gray-900">{campaign.title}</h1>
-        <p className="mb-3 text-sm text-gray-500">{formatPrize(campaign)}</p>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-soda-50 px-2.5 py-1 text-xs font-semibold text-soda-600">
+          {sponsor} 제공
+        </span>
+        <h1 className="mb-1 mt-2 text-2xl font-extrabold leading-snug text-gray-900">{campaign.title}</h1>
+        <p className="mb-3 text-right text-sm text-gray-500">{formatPrizeLine(campaign)}</p>
         <div className="flex items-center gap-3 text-xs text-gray-500">
           <CountdownTimer endAt={campaign.end_at} />
           <span>·</span>

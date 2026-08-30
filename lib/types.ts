@@ -199,6 +199,10 @@ export interface PublicCampaignWithConsensus extends PublicCampaign {
   consensus: Record<string, number>;
 }
 
+// 참가자 홈 피드 정렬 기준. "recommended"(추천순)가 기본값 — 인기(참여자 수)와 마감
+// 임박도를 함께 보는 "지금 뜨는" 캠페인 우선 노출, 순수 인기순/마감임박순과는 다른 기준.
+export type CampaignSort = "recommended" | "ending" | "popular";
+
 export interface ConsensusTrendPoint {
   at: string;
   total: number;
@@ -273,6 +277,23 @@ export interface GiftOrder {
   external_reference_id: string;
   soda_order_id: string | null;
   status: GiftOrderStatus;
+  created_at: string;
+}
+
+// 0007 마이그레이션: 활동알림(진행 현황 순위 변동 / 마감 임박 / 결과 발표)
+export const NOTIFICATION_TYPES = ["rank_change", "deadline_soon", "result"] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface AppNotification {
+  id: string;
+  participant_id: string;
+  campaign_id: string;
+  campaign_title: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  is_win: boolean | null;
+  read_at: string | null;
   created_at: string;
 }
 
