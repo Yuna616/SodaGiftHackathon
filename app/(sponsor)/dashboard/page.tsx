@@ -170,9 +170,9 @@ export default function SponsorDashboard() {
             )}
 
             <div className="mb-3 flex gap-2">
-              <a href="/" className="flex-1">
+              <a href={`/sponsors/${DEMO_SPONSOR_ID}`} className="flex-1">
                 <Button variant="secondary" className="w-full">
-                  유저 앱 보기
+                  참가자 화면으로 보기
                 </Button>
               </a>
               <Button variant="secondary" onClick={handleShare}>
