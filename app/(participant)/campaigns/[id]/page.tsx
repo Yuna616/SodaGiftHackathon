@@ -8,7 +8,7 @@ import ConsensusTrendChart from '@/components/ConsensusTrendChart';
 import CountdownTimer from '@/components/CountdownTimer';
 import InviteShareSheet from '@/components/InviteShareSheet';
 import FloatingPickBar, { type PickBarVariant } from '@/components/FloatingPickBar';
-import GoogleAccountPicker, { GoogleMark } from '@/components/GoogleAccountPicker';
+import GoogleAccountPicker from '@/components/GoogleAccountPicker';
 import { track } from '@/lib/track';
 import { toDisplayProducts } from '@/lib/products';
 import { getSession, setSession, getPendingInvite, clearPendingInvite } from '@/lib/session';
@@ -396,40 +396,8 @@ function CampaignDetailContent() {
           <p className="text-sm text-center text-gray-400 py-6">이미 마감된 캠페인입니다</p>
         )}
 
-        {!closed && stage === 'confirm' && selected && (
-          <div className="rounded-2xl border border-gray-200 p-4">
-            <p className="text-sm font-medium text-gray-800 mb-3">
-              선택하신 예측:{' '}
-              <span className="text-soda-600 font-semibold">
-                {campaign.options.find((o) => o.id === selected)?.label}
-              </span>
-            </p>
-            {error && <p className="text-xs text-rose-500 mb-2">{error}</p>}
-            {email ? (
-              <>
-                <p className="text-xs text-gray-500 mb-3">
-                  <span className="font-medium text-gray-700">{email}</span> 계정으로 참여해요
-                </p>
-                <button
-                  onClick={handlePickAttempt}
-                  className="w-full rounded-xl bg-black text-white font-semibold py-3 text-sm"
-                >
-                  지금 PICK 하기
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handlePickAttempt}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white py-3 text-sm font-semibold text-gray-700"
-              >
-                <GoogleMark />
-                Google로 계속하기
-              </button>
-            )}
-            <p className="text-[11px] text-gray-400 mt-2 text-center">
-              비밀번호나 결제 정보 없이, Google 계정만으로 참여할 수 있어요
-            </p>
-          </div>
+        {!closed && stage === 'confirm' && error && (
+          <p className="text-xs text-center text-rose-500 mb-4">{error}</p>
         )}
 
         {stage === 'submitting' && (
