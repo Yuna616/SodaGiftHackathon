@@ -12,15 +12,20 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createServiceRoleClient();
 
-  const { data, error } = await supabase
-    .from("reward_claims")
-    .select("*")
-    .eq("campaign_id", params.id)
-    .order("created_at", { ascending: false });
+  const [{ data: campaign, error: campaignError }, { data: claims, error: claimsError }] = await Promise.all([
+    supabase.from("campaigns").select("id, status").eq("id", params.id).maybeSingle(),
+    supabase.from("reward_claims").select("*").eq("campaign_id", params.id).order("created_at", { ascending: false }),
+  ]);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (campaignError) {
+    return NextResponse.json({ error: campaignError.message }, { status: 500 });
+  }
+  if (claimsError) {
+    return NextResponse.json({ error: claimsError.message }, { status: 500 });
+  }
+  if (!campaign) {
+    return NextResponse.json({ error: "CAMPAIGN_NOT_FOUND" }, { status: 404 });
   }
 
-  return NextResponse.json({ claims: data });
+  return NextResponse.json({ campaign, claims });
 }
