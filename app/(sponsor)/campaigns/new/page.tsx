@@ -46,6 +46,14 @@ const PRODUCT_TYPE_ORDER = ["GIFT_CARD", "DIGITAL_VOUCHER", "MERCHANDISE"];
 const PAGE_SIZE = 12;
 const STEP_LABELS = ["기본정보", "라운드 설계", "카탈로그", "예산 확인", "발행"];
 
+// 참가자 앱 카테고리 탭(components/CategoryTabs.tsx)과 값이 같아야 필터링에 걸린다.
+const CATEGORY_OPTIONS = [
+  { id: "kpop", label: "K팝" },
+  { id: "esports", label: "e스포츠" },
+  { id: "variety", label: "예능" },
+  { id: "drama", label: "드라마" },
+];
+
 function groupByType(products: Product[]): Map<string, Product[]> {
   const groups = new Map<string, Product[]>();
   for (const p of products) {
@@ -64,7 +72,15 @@ function formatPrice(p: Product): string {
   return `가격 미정 (${p.currency})`;
 }
 
+// <input type="datetime-local">에 넣을 수 있는 "YYYY-MM-DDTHH:mm" 형식으로 변환
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function emptyRound(n: number): RoundDraft {
+  const now = new Date();
+  const weekLater = new Date(now.getTime() + 7 * 86400000);
   return {
     round_number: n,
     question_text: "",
@@ -74,8 +90,8 @@ function emptyRound(n: number): RoundDraft {
     expected_winner_count: 100,
     credit_pool_amount: 100,
     credit_currency: "",
-    opens_at: "",
-    closes_at: "",
+    opens_at: toDatetimeLocalValue(now),
+    closes_at: toDatetimeLocalValue(weekLater),
   };
 }
 
@@ -132,8 +148,11 @@ export default function NewCampaignWizard() {
 
   // step 1
   const [title, setTitle] = useState("");
-  const [artistName, setArtistName] = useState("");
+  const [category, setCategory] = useState("kpop");
   const [missionUrl, setMissionUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   // step 2
   const [rounds, setRounds] = useState<RoundDraft[]>([emptyRound(1)]);
@@ -163,14 +182,29 @@ export default function NewCampaignWizard() {
     setSubmitting(true);
     setError(null);
     try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        setImageUploading(true);
+        const uploadForm = new FormData();
+        uploadForm.append("file", imageFile);
+        const uploadRes = await fetch("/api/uploads/campaign-image", { method: "POST", body: uploadForm });
+        const uploadJson = await uploadRes.json();
+        setImageUploading(false);
+        if (!uploadRes.ok) return setError(uploadJson.error ?? "이미지 업로드에 실패했습니다");
+        imageUrl = uploadJson.url;
+      }
+
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sponsor_id: DEMO_SPONSOR_ID,
           title,
-          artist_name: artistName || undefined,
+          category,
           mission_url: missionUrl || undefined,
+          thumbnail_url: imageUrl,
+          media_url: imageUrl,
+          media_type: imageUrl ? "image" : undefined,
         }),
       });
       const json = await res.json();
@@ -194,6 +228,12 @@ export default function NewCampaignWizard() {
     setError(null);
     try {
       for (const r of rounds) {
+        if (!r.opens_at || !r.closes_at) {
+          return setError(`라운드 ${r.round_number}: 시작/마감 일시를 입력해주세요`);
+        }
+        if (new Date(r.closes_at).getTime() <= new Date(r.opens_at).getTime()) {
+          return setError(`라운드 ${r.round_number}: 마감 일시는 시작 일시보다 뒤여야 합니다`);
+        }
         const common = {
           round_number: r.round_number,
           question_text: r.question_text,
@@ -299,8 +339,33 @@ export default function NewCampaignWizard() {
           <Field label="제목">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 이번 주 뮤직뱅크 1위는?" />
           </Field>
-          <Field label="아티스트명">
-            <Input value={artistName} onChange={(e) => setArtistName(e.target.value)} placeholder="예: NewJeans" />
+          <Field label="카테고리" hint="참가자 앱 카테고리 탭 필터링에 쓰여요.">
+            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORY_OPTIONS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="메인 이미지 (선택)"
+            hint="참가자 앱 캠페인 카드/상세 화면 상단에 노출돼요. PNG/JPEG/WEBP/GIF, 5MB 이하."
+          >
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setImageFile(file);
+                setImagePreviewUrl(file ? URL.createObjectURL(file) : null);
+              }}
+              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+            {imagePreviewUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagePreviewUrl} alt="" className="mt-2 h-32 w-full rounded-lg object-cover" />
+            )}
           </Field>
           <Field
             label="참여 미션 URL (선택)"
@@ -315,7 +380,7 @@ export default function NewCampaignWizard() {
           </Field>
           <div className="mt-6 flex justify-end">
             <Button onClick={handleCreateCampaign} disabled={!title || submitting}>
-              {submitting ? "생성 중..." : "다음"}
+              {imageUploading ? "이미지 업로드 중..." : submitting ? "생성 중..." : "다음"}
             </Button>
           </div>
         </Card>
@@ -356,6 +421,45 @@ export default function NewCampaignWizard() {
                     }}
                   />
                 ))}
+              </div>
+
+              <Field label="판정 기준" hint="참가자 상세 화면에 그대로 노출돼요. 모호하면 발행 전 검토 단계에서 놓치기 쉬워요.">
+                <textarea
+                  value={r.resolution_criteria}
+                  onChange={(e) => {
+                    const next = [...rounds];
+                    next[i] = { ...r, resolution_criteria: e.target.value };
+                    setRounds(next);
+                  }}
+                  placeholder="예: 멜론차트 이번 주 금요일 오후 6시 기준 1위 곡"
+                  rows={2}
+                  className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </Field>
+
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <Field label="시작 일시">
+                  <Input
+                    type="datetime-local"
+                    value={r.opens_at}
+                    onChange={(e) => {
+                      const next = [...rounds];
+                      next[i] = { ...r, opens_at: e.target.value };
+                      setRounds(next);
+                    }}
+                  />
+                </Field>
+                <Field label="마감 일시">
+                  <Input
+                    type="datetime-local"
+                    value={r.closes_at}
+                    onChange={(e) => {
+                      const next = [...rounds];
+                      next[i] = { ...r, closes_at: e.target.value };
+                      setRounds(next);
+                    }}
+                  />
+                </Field>
               </div>
 
               <div className="mb-4">
@@ -600,8 +704,9 @@ export default function NewCampaignWizard() {
           {budget.currency_mismatch && (
             <div className="mb-3">
               <Callout tone="amber">
-                ⚠ 크레딧 풀 통화가 계정 잔액 통화({budget.currency})와 달라요. 환율은 실제 지급 시점에
-                결정되므로 위 합계는 액면가 기준 참고용 추정치예요.
+                ⚠ 카탈로그 상품 또는 크레딧 풀 통화가 계정 잔액 통화({budget.currency})와 달라요.
+                환율은 실제 지급 시점에 결정되므로 위 합계와 충분/부족 판정은 액면가 기준 참고용
+                추정치예요 — 실제로는 발행 가능한데 부족하다고 나올 수 있으니 참고만 하세요.
               </Callout>
             </div>
           )}
