@@ -22,6 +22,10 @@ function getApiKey(): string {
 async function sodaFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${SODA_API_BASE_URL}${path}`, {
     ...init,
+    // Next.js가 fetch()를 자동으로 Data Cache에 넣으려다 상품 목록(2MB+)에서
+    // "items over 2MB can not be cached" 경고를 냄 — 어차피 /api/products 라우트가
+    // 자체 5분 캐시를 갖고 있어서 이중 캐싱이 필요 없다, 그래서 명시적으로 끈다.
+    cache: "no-store",
     headers: {
       "SODA-API-KEY": getApiKey(),
       "Content-Type": "application/json",
@@ -62,6 +66,14 @@ const productSchema = z.object({
     id: z.number(),
     name: z.string(),
   }),
+  // 참가자 앱 상품 카드에 브랜드명 표시용(예: "adidas Singapore"). 실호출로 확인함(2026-08-29).
+  brand: z
+    .object({
+      name: z.string(),
+      nameEn: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 export type SodaProduct = z.infer<typeof productSchema>;
 
@@ -116,7 +128,13 @@ export function buildExternalReferenceId(
   roundId: string,
   participantId: string
 ): string {
-  const hash = createHash("sha256").update(`${campaignId}:${roundId}:${participantId}`).digest("hex");
+  return buildReferenceId(campaignId, roundId, participantId);
+}
+
+// 라운드/클레임과 무관한 건(예: 선물하기)에도 같은 제약(영숫자, 100자 이하)이 적용돼서
+// 범용 버전으로 분리해뒀다 — 부분 인자만 넘기고 싶을 때 이걸 직접 써도 된다.
+export function buildReferenceId(...parts: (string | number)[]): string {
+  const hash = createHash("sha256").update(parts.join(":")).digest("hex");
   return `sp${hash}`;
 }
 
