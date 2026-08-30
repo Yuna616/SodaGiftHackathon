@@ -332,8 +332,8 @@ function CampaignDetailContent() {
             </span>
           )}
         </div>
-        <p className="text-2xl font-extrabold text-gray-900 leading-snug mb-1">{formatPrize(campaign)}</p>
-        <h1 className="text-sm text-gray-500 mb-3">{campaign.title}</h1>
+        <h1 className="text-2xl font-extrabold text-gray-900 leading-snug mb-1">{campaign.title}</h1>
+        <p className="text-sm text-gray-500 mb-3">{formatPrize(campaign)}</p>
         <div className="flex items-center gap-3 text-xs text-gray-500">
           {campaign.status === 'active' ? (
             <CountdownTimer endAt={campaign.end_at} />
