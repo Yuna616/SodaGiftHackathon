@@ -54,8 +54,8 @@ export default function CampaignCard({ campaign }: { campaign: PublicCampaignWit
               </span>
             )}
           </div>
-          <p className="text-xl font-extrabold text-gray-900 leading-tight mb-1.5">{formatPrize(campaign)}</p>
-          <h3 className="text-sm text-gray-500 mb-3">{campaign.title}</h3>
+          <h3 className="text-xl font-extrabold text-gray-900 leading-tight mb-1.5">{campaign.title}</h3>
+          <p className="text-sm text-gray-500 mb-3">{formatPrize(campaign)}</p>
         </div>
       </Link>
 

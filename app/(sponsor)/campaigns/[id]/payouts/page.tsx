@@ -31,22 +31,48 @@ const STATUS_TONES: Record<string, "slate" | "blue" | "amber" | "green" | "red">
   failed: "red",
 };
 
+// 주문 완료(order_placed)까지 가면 소다기프트에 실제 주문이 들어간 상태라
+// 스폰서가 더 할 일이 없다 — 실제 배송 여부를 이 앱이 콜백으로 추적하진
+// 않으니 "끝난" 상태로 취급한다. 정답자가 아직 상품을 고르지도 않은
+// eligible/product_selected만 "진행 중"으로 보고, 하나라도 남아있으면
+// "이벤트 끝내기"를 못 누르게 막는다.
+const INCOMPLETE_STATUSES = new Set(["eligible", "product_selected"]);
+
 export default function PayoutsPage({ params }: { params: { id: string } }) {
+  const [campaignStatus, setCampaignStatus] = useState<string | null>(null);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showFailedOnly, setShowFailedOnly] = useState(false);
   // 재시도 버튼 연타 방지 — 클레임별로 잠가서 다른 건 재시도는 막지 않는다
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set());
+  const [ending, setEnding] = useState(false);
 
   async function load() {
     const res = await fetch(`/api/campaigns/${params.id}/claims`);
     const json = await res.json();
-    if (res.ok) setClaims(json.claims ?? []);
+    if (res.ok) {
+      setClaims(json.claims ?? []);
+      setCampaignStatus(json.campaign?.status ?? null);
+    }
   }
 
   useEffect(() => {
     load();
   }, []);
+
+  async function handleEndEvent() {
+    if (ending) return;
+    setEnding(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${params.id}/end`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) return setError(typeof json.error === "string" ? json.error : "이벤트 종료에 실패했습니다");
+      setCampaignStatus(json.campaign.status);
+    } finally {
+      setEnding(false);
+    }
+  }
 
   async function handleRetry(claimId: string) {
     if (retryingIds.has(claimId)) return;
@@ -67,6 +93,8 @@ export default function PayoutsPage({ params }: { params: { id: string } }) {
   }
 
   const failedCount = claims.filter((c) => c.status === "failed").length;
+  const incompleteCount = claims.filter((c) => INCOMPLETE_STATUSES.has(c.status)).length;
+  const canEndEvent = campaignStatus === "active" && claims.length > 0 && incompleteCount === 0;
   const visible = showFailedOnly ? claims.filter((c) => c.status === "failed") : claims;
 
   return (
@@ -76,7 +104,15 @@ export default function PayoutsPage({ params }: { params: { id: string } }) {
           <h1 className="mb-1 text-2xl font-bold text-slate-900">지급 현황</h1>
           <p className="text-sm text-slate-500">참가자별 리워드 지급 상태를 확인하고 실패 건을 재시도해요.</p>
         </div>
-        {failedCount > 0 && <Badge tone="red">실패 {failedCount}건</Badge>}
+        <div className="flex items-center gap-2">
+          {failedCount > 0 && <Badge tone="red">실패 {failedCount}건</Badge>}
+          {campaignStatus === "ended" && <Badge tone="slate">종료됨</Badge>}
+          {canEndEvent && (
+            <Button onClick={handleEndEvent} disabled={ending}>
+              {ending ? "종료 중..." : "이벤트 끝내기"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {error && (

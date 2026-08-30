@@ -86,27 +86,41 @@ async function fetchCampaignAndRound(
   return { campaign, round, sponsorName: sponsor?.name ?? "" };
 }
 
+// options/예측 목록만 있으면 순수 계산으로 끝나는 부분 — 쿼리를 몇 번 하든 이 함수
+// 자체는 DB를 안 건드린다. attachConsensus(단건)와 listCampaigns(다건, 배치 쿼리)가
+// 같이 쓴다.
+function computeConsensus(
+  options: CampaignOption[],
+  selectedOptionIndexes: number[]
+): { total_predictions: number; counts: Record<string, number>; consensus: Record<string, number> } {
+  const counts: Record<string, number> = {};
+  for (const opt of options) counts[opt.id] = 0;
+  for (const idx of selectedOptionIndexes) {
+    const key = String(idx);
+    if (key in counts) counts[key] += 1;
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const consensus: Record<string, number> = {};
+  for (const opt of options) {
+    consensus[opt.id] = total > 0 ? Math.round((counts[opt.id] / total) * 1000) / 10 : 0;
+  }
+  return { total_predictions: total, counts, consensus };
+}
+
 async function attachConsensus(pub: PublicCampaign): Promise<PublicCampaignWithConsensus> {
   const supabase = sb();
   const { data: predictions } = await supabase
     .from("predictions")
     .select("selected_option_index")
     .eq("round_id", pub.round_id);
-
-  const counts: Record<string, number> = {};
-  const consensus: Record<string, number> = {};
-  for (const opt of pub.options) counts[opt.id] = 0;
-  for (const p of predictions ?? []) {
-    const key = String(p.selected_option_index);
-    if (key in counts) counts[key] += 1;
-  }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  for (const opt of pub.options) {
-    consensus[opt.id] = total > 0 ? Math.round((counts[opt.id] / total) * 1000) / 10 : 0;
-  }
-  return { ...pub, total_predictions: total, counts, consensus };
+  return { ...pub, ...computeConsensus(pub.options, (predictions ?? []).map((p) => p.selected_option_index)) };
 }
 
+// listCampaigns는 참가자 홈에서 매번 부르는 경로라 N+1 쿼리에 특히 민감하다.
+// 이전엔 캠페인마다 fetchCampaignAndRound(캠페인/라운드/스폰서 3번) + attachConsensus(1번),
+// 총 1 + 4N번의 요청을 순차(await 반복문)로 날려서 캠페인이 늘수록 홈 화면이 선형으로
+// 느려졌다 — round/sponsor/predictions를 캠페인 id들 기준으로 한 번씩만 배치 조회하도록
+// 고쳐서 캠페인 개수와 무관하게 쿼리 4번으로 끝나게 한다.
 export async function listCampaigns(
   category?: string,
   sort: "ending" | "popular" = "ending"
@@ -115,13 +129,38 @@ export async function listCampaigns(
   let query = supabase.from("campaigns").select("*").neq("status", "draft");
   if (category && category !== "all") query = query.eq("category", category);
   const { data: campaigns } = await query;
+  if (!campaigns || campaigns.length === 0) return [];
+
+  const campaignIds = campaigns.map((c) => c.id);
+  const sponsorIds = Array.from(new Set(campaigns.map((c) => c.sponsor_id)));
+
+  const [{ data: rounds }, { data: sponsors }] = await Promise.all([
+    supabase.from("rounds").select("*").in("campaign_id", campaignIds).eq("round_number", 1),
+    supabase.from("sponsors").select("id, name").in("id", sponsorIds),
+  ]);
+
+  const roundByCampaignId = new Map((rounds ?? []).map((r) => [r.campaign_id, r as RoundRow]));
+  const sponsorNameById = new Map((sponsors ?? []).map((s) => [s.id, s.name as string]));
+
+  const roundIds = (rounds ?? []).map((r) => r.id);
+  const { data: predictions } =
+    roundIds.length > 0
+      ? await supabase.from("predictions").select("round_id, selected_option_index").in("round_id", roundIds)
+      : { data: [] as { round_id: string; selected_option_index: number }[] };
+
+  const indexesByRoundId = new Map<string, number[]>();
+  for (const p of predictions ?? []) {
+    const list = indexesByRoundId.get(p.round_id) ?? [];
+    list.push(p.selected_option_index);
+    indexesByRoundId.set(p.round_id, list);
+  }
 
   const results: PublicCampaignWithConsensus[] = [];
-  for (const campaign of campaigns ?? []) {
-    const bundle = await fetchCampaignAndRound(campaign.id);
-    if (!bundle) continue;
-    const pub = toPublicCampaign(bundle.campaign, bundle.round, bundle.sponsorName);
-    results.push(await attachConsensus(pub));
+  for (const campaign of campaigns) {
+    const round = roundByCampaignId.get(campaign.id);
+    if (!round) continue; // 라운드가 아직 없는 캠페인(비정상 상태) — 목록에서 제외
+    const pub = toPublicCampaign(campaign, round, sponsorNameById.get(campaign.sponsor_id) ?? "");
+    results.push({ ...pub, ...computeConsensus(pub.options, indexesByRoundId.get(round.id) ?? []) });
   }
 
   if (sort === "popular") {
