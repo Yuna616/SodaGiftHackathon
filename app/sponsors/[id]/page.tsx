@@ -52,9 +52,15 @@ export default function PublicSponsorProfilePage({ params }: { params: { id: str
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
             고객사 프로필
           </span>
-          <a href="/" className="ml-auto text-xs text-slate-400 underline hover:text-slate-600">
-            참가자 앱으로
-          </a>
+          <div className="ml-auto flex items-center gap-3">
+            {/* 개발 편의용 — 대시보드에서 "참가자 화면으로 보기"로 넘어온 스폰서가 바로 돌아갈 수 있게 */}
+            <a href="/dashboard" className="text-xs text-slate-400 underline hover:text-slate-600">
+              고객사 대시보드로
+            </a>
+            <a href="/" className="text-xs text-slate-400 underline hover:text-slate-600">
+              참가자 앱으로
+            </a>
+          </div>
         </div>
       </header>
       <div className="mx-auto max-w-6xl px-6 py-8">
