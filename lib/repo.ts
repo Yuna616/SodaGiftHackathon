@@ -329,6 +329,8 @@ function toClaimOrder(claim: {
   external_reference_id: string;
   soda_order_id: string | null;
   status: string;
+  payout_amount?: number | null;
+  payout_currency?: string | null;
   created_at: string;
 }): ClaimOrder | null {
   // eligible/product_selected는 "아직 주문 안 됨" — teammate 원본 의미(claim_orders row
@@ -341,6 +343,8 @@ function toClaimOrder(claim: {
     external_reference_id: claim.external_reference_id,
     soda_order_id: claim.soda_order_id,
     status: claim.status === "failed" ? "FAILED" : "ISSUED",
+    payout_amount: claim.payout_amount ?? null,
+    payout_currency: claim.payout_currency ?? null,
     created_at: claim.created_at,
   };
 }
