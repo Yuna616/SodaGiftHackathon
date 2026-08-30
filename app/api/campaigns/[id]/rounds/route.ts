@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 const baseRoundSchema = {
   round_number: z.number().int().positive(),
   question_text: z.string().min(1),
-  options: z.array(z.string().min(1)).length(4),
+  options: z.array(z.string().min(1)).min(2).max(8),
   resolution_criteria: z.string().optional(),
   opens_at: z.string().datetime(),
   closes_at: z.string().datetime(),

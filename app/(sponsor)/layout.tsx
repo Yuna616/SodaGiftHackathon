@@ -3,10 +3,11 @@
 import { usePathname } from "next/navigation";
 
 export default function SponsorLayout({ children }: { children: React.ReactNode }) {
-  // 대시보드는 프로필 사이드바 + 목록 2단 레이아웃이라 다른 화면(마법사/판정
-  // 콘솔/지급 현황)보다 더 넓은 폭이 필요하다.
-  const isDashboard = usePathname() === "/dashboard";
-  const widthClass = isDashboard ? "max-w-6xl" : "max-w-4xl";
+  // 대시보드(프로필 사이드바+목록)와 캠페인 생성 마법사(폼+실시간 미리보기)는
+  // 2단 레이아웃이라 다른 화면(판정 콘솔/지급 현황)보다 더 넓은 폭이 필요하다.
+  const pathname = usePathname();
+  const isWide = pathname === "/dashboard" || pathname === "/campaigns/new";
+  const widthClass = isWide ? "max-w-6xl" : "max-w-4xl";
 
   return (
     <div className="min-h-screen bg-slate-50">

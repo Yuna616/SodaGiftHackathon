@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getCampaignWithConsensus } from "@/lib/repo";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
@@ -11,6 +12,57 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "CAMPAIGN_NOT_FOUND" }, { status: 404 });
   }
   return NextResponse.json({ campaign });
+}
+
+// 고객사 콘솔: 캠페인 마법사 1단계(기본정보) 재수정용. 마법사에서 "이전"으로
+// 돌아갔다가 다시 "다음"을 누르면, 매번 새 캠페인을 만드는 대신 이미 만든
+// draft를 그대로 덮어쓴다(POST /api/campaigns를 또 부르면 draft가 중복 생성됨).
+const updateCampaignSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    category: z.string().optional(),
+    mission_url: z.string().url().optional(),
+    thumbnail_url: z.string().optional(),
+    media_url: z.string().optional(),
+    media_type: z.enum(["image", "video"]).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "수정할 값이 없습니다" });
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const body = await req.json().catch(() => null);
+  const parsed = updateCampaignSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const supabase = createServiceRoleClient();
+
+  const { data: campaign, error: fetchError } = await supabase
+    .from("campaigns")
+    .select("id, status")
+    .eq("id", params.id)
+    .maybeSingle();
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+  if (!campaign) {
+    return NextResponse.json({ error: "CAMPAIGN_NOT_FOUND" }, { status: 404 });
+  }
+  if (campaign.status !== "draft") {
+    return NextResponse.json({ error: "발행된 캠페인은 기본정보를 수정할 수 없습니다" }, { status: 409 });
+  }
+
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update(parsed.data)
+    .eq("id", params.id)
+    .select()
+    .single();
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ campaign: data });
 }
 
 // 고객사 콘솔: 캠페인 삭제. 발행 전(draft) 캠페인만 지울 수 있다 — 한 번 발행되면
