@@ -80,7 +80,8 @@ export interface Round {
   options: string[]; // 4지선다
   resolution_criteria: string | null;
   reward_mode: RewardMode;
-  expected_winner_count: number | null; // PRODUCT 모드에서만 필수, 스폰서 직접 입력 (자동 계산 아님)
+  expected_winner_count: number | null; // PRODUCT/CREDIT 둘 다 필수, 스폰서 직접 입력. 최대 당첨자 수 —
+  // 정답자가 이 수를 넘으면 판정 확정 시점에 무작위로 당첨자를 뽑는다(0011 마이그레이션)
   credit_pool_amount: number | null; // CREDIT 모드에서만 필수
   credit_currency: string | null; // CREDIT 모드: 이 통화 안에서 당첨자가 브랜드를 직접 고른다
   prize_label: string | null; // 0004: PRODUCT 모드 표시용 문구, null이면 프론트 기본값 사용
@@ -185,7 +186,8 @@ export interface PublicCampaign {
   prize_label: string;
   prize_amount: number | null; // CREDIT일 때 credit_pool_amount
   prize_currency: string | null; // CREDIT일 때만
-  winner_count: number | null; // PRODUCT: expected_winner_count. CREDIT: 알 수 없음(null)
+  winner_count: number | null; // 최대 당첨자 수(expected_winner_count) — PRODUCT/CREDIT 공통,
+  // 정답자가 이보다 많으면 판정 시점에 무작위 선정으로 이 인원까지만 당첨된다
   thumbnail_url: string;
   media_url: string;
   media_type: "image" | "video";

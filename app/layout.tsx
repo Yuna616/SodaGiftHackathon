@@ -2,7 +2,6 @@ import "./globals.css";
 
 export const metadata = {
   title: "SodaPick",
-  description: "Predict K-Pop comebacks and win real gift cards",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
